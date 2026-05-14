@@ -5,9 +5,18 @@ import os
 import subprocess
 import sys
 
-MODE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mode.json")
-OPEN_ID = "ou_REDACTED"
+PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
+MODE_FILE = os.path.join(PROJECT_DIR, "mode.json")
+CONFIG_FILE = os.path.join(PROJECT_DIR, "config.json")
 LARK_CLI = os.path.join(os.environ.get("APPDATA", ""), "npm", "lark-cli.cmd")
+
+
+def _load_open_id():
+    try:
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+            return json.load(f).get("open_id", "")
+    except (FileNotFoundError, json.JSONDecodeError):
+        return ""
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
@@ -54,11 +63,11 @@ def extract_summary(event, etype):
     return str(tool_input)
 
 
-def _lark_send(text):
+def _lark_send(open_id, text):
     content = json.dumps({"text": text})
     subprocess.run(
         [LARK_CLI, "im", "+messages-send", "--as", "bot",
-         "--user-id", OPEN_ID, "--content", content, "--msg-type", "text"],
+         "--user-id", open_id, "--content", content, "--msg-type", "text"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         encoding="utf-8", errors="replace",
         timeout=10, creationflags=CREATE_NO_WINDOW,
@@ -81,6 +90,11 @@ def main():
 
     etype = event_type(event)
     if etype == "unknown":
+        print(json.dumps({}))
+        return
+
+    open_id = _load_open_id()
+    if not open_id:
         print(json.dumps({}))
         return
 
@@ -121,7 +135,7 @@ def main():
             f"{hint}"
         )
 
-    _lark_send(text)
+    _lark_send(open_id, text)
     print(json.dumps({}))
 
 

@@ -20,9 +20,12 @@ except ImportError:
 PROJECT_DIR = os.path.dirname(os.path.abspath(__file__))
 MODE_FILE = os.path.join(PROJECT_DIR, "mode.json")
 CONFIG_FILE = os.path.join(PROJECT_DIR, "config.json")
-OPEN_ID = "ou_REDACTED"
-BOT_APP_ID = "cli_a97608a4cbf89bb4"
 LARK_CLI = os.path.join(os.environ.get("APPDATA", ""), "npm", "lark-cli.cmd")
+
+
+def _get_open_id():
+    cfg = load_config()
+    return cfg.get("open_id", "")
 
 MODES = {
     "all": ("全部开启", (76, 175, 80)),
@@ -78,6 +81,9 @@ def _lark(*args, timeout=10):
 
 
 def send_reply(message_id, text):
+    open_id = _get_open_id()
+    if not open_id:
+        return
     _lark(
         "im", "+messages-reply", "--as", "bot",
         "--message-id", message_id,
@@ -223,6 +229,9 @@ def handle_command(text, msg_id, icon_ref):
 
 def feishu_events(icon_ref):
     """后台线程：lark-cli event consume 实时监听飞书消息."""
+    open_id = _get_open_id()
+    if not open_id:
+        return
     while True:
         try:
             proc = subprocess.Popen(
@@ -252,7 +261,7 @@ def feishu_events(icon_ref):
                     continue
 
                 sender = event.get("sender_id", "")
-                if sender != OPEN_ID:
+                if sender != open_id:
                     continue
 
                 content_str = event.get("content", "")
@@ -276,14 +285,16 @@ def feishu_events(icon_ref):
 
 def feishu_poll(icon_ref):
     """后台线程：HTTP 轮询作为事件订阅的备用."""
-    # 先尝试发现 chat_id
+    open_id = _get_open_id()
+    if not open_id:
+        return
     cfg = load_config()
     chat_id = cfg.get("chat_id", "")
     if not chat_id:
         # 发一条哑消息来发现
         ok, data = _lark(
             "im", "+messages-send", "--as", "bot",
-            "--user-id", OPEN_ID,
+            "--user-id", open_id,
             "--content", json.dumps({"text": " "}), "--msg-type", "text",
             timeout=15,
         )
@@ -327,7 +338,7 @@ def feishu_poll(icon_ref):
 
             for msg in items:
                 sender = msg.get("sender", {}).get("id", "")
-                if sender != OPEN_ID:
+                if sender != open_id:
                     continue
 
                 body = msg.get("body", {}).get("content", "")
