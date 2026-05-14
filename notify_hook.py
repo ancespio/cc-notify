@@ -54,8 +54,12 @@ def extract_tool(event):
 
 
 def sanitize(s):
-    """移除可能破坏 JSON/CMD 的特殊字符."""
-    return s.replace("\\", "/").replace('"', "'").replace("&", "+").replace(";", ",")
+    """裁剪到第一个 shell 分隔符前，避免 & ; 破坏 CMD 传参."""
+    for sep in (" && ", " & ", "; "):
+        idx = s.find(sep)
+        if idx > 0:
+            return s[:idx] + " ..."
+    return s
 
 
 def extract_summary(event, etype):
