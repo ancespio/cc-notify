@@ -1,8 +1,8 @@
 # CC-Notify on Lark CLI
 
-> **Claude Code + 飞书 CLI** — 通过 Claude Code Hook 将权限请求、提问事件、任务完成通知实时推送到飞书，支持飞书端远程开关。不替代终端交互，只做 SSH 远程场景下的注意力补位。
+> **Claude Code + 飞书 CLI** — 通过 Claude Code Hook 将权限请求（PermissionRequest）、提问事件（Elicitation）、任务完成（Stop）实时推送到飞书，支持飞书端远程开关。覆盖所有用户需介入的场景。
 
-> **Claude Code + Feishu CLI** — Push Claude Code permission requests, elicitation events, and turn-completion notifications to Feishu in real time via hooks. Remote toggle supported. Designed as an attention bridge for SSH relay workflows, not a terminal replacement.
+> **Claude Code + Feishu CLI** — Push permission requests, elicitations, and turn completions to Feishu via hooks. Covers all user-intervention scenarios. Remote toggle supported.
 
 ## Abstract / 摘要
 
@@ -27,7 +27,7 @@ Hook 脚本和托盘应用**独立运行**——通知由 Hook 触发，不需�
 
 Copy this to your AI agent (Claude Code, Cursor, etc.):
 
-> 帮我在 Windows 上部署 CC-Notify：1) 确认已安装 `lark-cli`（`npm install -g @larksuite/cli`）并已登录；2) `git clone https://github.com/ancespio/cc-notify.git`；3) `cd cc-notify && pip install pystray Pillow`；4) 运行 `python -c "import subprocess,json,os; lark=os.path.join(os.environ['APPDATA'],'npm','lark-cli.cmd'); r=subprocess.run([lark,'api','GET','/open-apis/authen/v1/user_info'],capture_output=True,text=True,encoding='utf-8'); print(json.loads(r.stdout)['data']['open_id'])"` 获取 open_id，写入 `config.json`（格式 `{"open_id":"ou_xxx","chat_id":""}`）；5) 在 `~/.claude/settings.json` 的 `hooks` 中添加 PermissionRequest 和 Elicitation 两个 Hook，command 指向 `notify_hook.py` 的绝对路径。
+> 帮我在 Windows 上部署 CC-Notify：1) 确认已安装 `lark-cli`（`npm install -g @larksuite/cli`）并已登录；2) `git clone https://github.com/ancespio/cc-notify.git`；3) `cd cc-notify && pip install pystray Pillow`；4) 运行 `python -c "import subprocess,json,os; lark=os.path.join(os.environ['APPDATA'],'npm','lark-cli.cmd'); r=subprocess.run([lark,'api','GET','/open-apis/authen/v1/user_info'],capture_output=True,text=True,encoding='utf-8'); print(json.loads(r.stdout)['data']['open_id'])"` 获取 open_id，写入 `config.json`（格式 `{"open_id":"ou_xxx","chat_id":""}`）；5) 在 `~/.claude/settings.json` 的 `hooks` 中添加 `PermissionRequest`、`Elicitation`、`Stop` 三个 Hook，command 指向 `notify_hook.py` 的绝对路径。
 
 ## Prerequisites / 前提
 
@@ -73,15 +73,6 @@ Add to / 添加到 `~/.claude/settings.json`:
 ```json
 {
   "hooks": {
-    "PreToolUse": [
-      {
-        "matcher": "Bash",
-        "hooks": [{
-          "type": "command",
-          "command": "python \"C:/absolute/path/to/cc-notify/notify_hook.py\""
-        }]
-      }
-    ],
     "PermissionRequest": [
       {
         "matcher": "*",
