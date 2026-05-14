@@ -7,6 +7,9 @@ import sys
 import threading
 import time
 
+# Windows 无控制台窗口标志
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+
 from PIL import Image, ImageDraw
 
 try:
@@ -68,6 +71,7 @@ def _lark(*args, timeout=10):
             capture_output=True,
             text=True,
             timeout=timeout,
+            creationflags=CREATE_NO_WINDOW,
         )
         if result.returncode != 0:
             return False, None

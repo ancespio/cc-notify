@@ -8,6 +8,7 @@ import sys
 MODE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mode.json")
 OPEN_ID = "ou_REDACTED"
 LARK_CLI = os.path.join(os.environ.get("APPDATA", ""), "npm", "lark-cli.cmd")
+CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
 def load_mode():
@@ -22,9 +23,15 @@ def is_ssh_session():
     return bool(os.environ.get("SSH_TTY") or os.environ.get("SSH_CONNECTION"))
 
 
-def extract_workspace():
-    cwd = os.getcwd()
+def extract_workspace(event):
+    cwd = event.get("cwd", "") or os.getcwd()
     return os.path.basename(cwd)
+
+
+def is_permission_request(event):
+    """兼容 Claude Code 不同版本的 event 字段格式."""
+    ev = event.get("event") or event.get("hook_event") or ""
+    return ev.lower() in ("permissionrequest", "permission_request")
 
 
 def send_feishu(tool_name, args_summary, workspace):
@@ -45,11 +52,11 @@ def send_feishu(tool_name, args_summary, workspace):
             "--user-id", OPEN_ID,
             "--content", content,
             "--msg-type", "text",
-            "-y",
         ],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
         timeout=10,
+        creationflags=CREATE_NO_WINDOW,
     )
 
 
@@ -60,7 +67,7 @@ def main():
         print(json.dumps({}))
         return
 
-    if event.get("hook_event") != "PermissionRequest":
+    if not is_permission_request(event):
         print(json.dumps({}))
         return
 
@@ -72,8 +79,8 @@ def main():
         print(json.dumps({}))
         return
 
-    tool_name = event.get("tool_name", "unknown")
-    arguments = event.get("arguments", "")
+    tool_name = event.get("tool_name") or event.get("toolName") or "unknown"
+    arguments = event.get("arguments") or event.get("args") or ""
     if isinstance(arguments, dict):
         args_summary = json.dumps(arguments, ensure_ascii=False)
     else:
@@ -81,7 +88,7 @@ def main():
     if len(args_summary) > 200:
         args_summary = args_summary[:197] + "..."
 
-    workspace = extract_workspace()
+    workspace = extract_workspace(event)
     send_feishu(tool_name, args_summary, workspace)
 
     # 空决策 = 交由终端交互式审批
