@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""CC-Notify Hook: 监听 Claude Code PermissionRequest，飞书推送 + 远程审批."""
+"""CC-Notify Hook: 监听 Claude Code PermissionRequest，飞书卡片推送 + 远程审批."""
 import json
 import os
 import subprocess
@@ -12,7 +12,7 @@ PENDING_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pending"
 OPEN_ID = "ou_REDACTED"
 LARK_CLI = os.path.join(os.environ.get("APPDATA", ""), "npm", "lark-cli.cmd")
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
-APPROVE_TIMEOUT = 60  # 等待飞书审批的最长秒数
+APPROVE_TIMEOUT = 60
 
 
 def load_mode():
@@ -37,7 +37,20 @@ def is_permission_request(event):
     return ev.lower() in ("permissionrequest", "permission_request")
 
 
-def _lark_send(text):
+def _lark_send_card(card):
+    """发送交互卡片."""
+    content = json.dumps(card, ensure_ascii=False)
+    subprocess.run(
+        [LARK_CLI, "im", "+messages-send", "--as", "bot",
+         "--user-id", OPEN_ID, "--content", content, "--msg-type", "interactive"],
+        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+        encoding="utf-8", errors="replace",
+        timeout=10, creationflags=CREATE_NO_WINDOW,
+    )
+
+
+def _lark_send_text(text):
+    """发送纯文本消息."""
     content = json.dumps({"text": text})
     subprocess.run(
         [LARK_CLI, "im", "+messages-send", "--as", "bot",
@@ -61,7 +74,6 @@ def wait_for_decision(req_id, timeout=APPROVE_TIMEOUT):
         except (FileNotFoundError, json.JSONDecodeError):
             pass
         time.sleep(1)
-    # 超时，删掉 pending 文件
     try:
         os.remove(decision_file)
     except FileNotFoundError:
@@ -98,34 +110,47 @@ def main():
         args_summary = args_summary[:197] + "..."
 
     workspace = extract_workspace(event)
-
-    # 生成唯一请求 ID，写入 pending
     req_id = uuid.uuid4().hex[:8]
+
+    # 写 pending 文件
     os.makedirs(PENDING_DIR, exist_ok=True)
     pending_file = os.path.join(PENDING_DIR, f"{req_id}.json")
     with open(pending_file, "w", encoding="utf-8") as f:
         json.dump({
-            "req_id": req_id,
-            "tool_name": tool_name,
-            "args_summary": args_summary,
-            "workspace": workspace,
+            "req_id": req_id, "tool_name": tool_name,
+            "args_summary": args_summary, "workspace": workspace,
             "decision": "",
         }, f, ensure_ascii=False)
 
-    # 发送飞书通知，带上审批指令
-    text = (
-        f"🔐 Claude Code 需要授权\n"
-        f"━━━━━━━━━━\n"
-        f"工作区: {workspace}\n"
-        f"工具: {tool_name}\n"
-        f"命令: {args_summary}\n"
-        f"━━━━━━━━━━\n"
-        f"回复 /approve {req_id} 批准\n"
-        f"回复 /deny {req_id} 拒绝"
-    )
-    _lark_send(text)
+    # 发送交互卡片
+    card = {
+        "config": {"wide_screen_mode": True},
+        "header": {
+            "title": {"tag": "plain_text", "content": "🔐 Claude Code 需要授权"},
+            "template": "blue",
+        },
+        "elements": [
+            {
+                "tag": "div",
+                "fields": [
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**工作区**\n{workspace}"}},
+                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**工具**\n{tool_name}"}},
+                ]
+            },
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": f"**命令**\n```{args_summary[:300]}```"}
+            },
+            {"tag": "hr"},
+            {
+                "tag": "div",
+                "text": {"tag": "lark_md", "content": f"`/approve {req_id}`  批准\n`/deny {req_id}`  拒绝"}
+            },
+        ],
+    }
+    _lark_send_card(card)
 
-    # 等待飞书审批
+    # 等待审批
     decision = wait_for_decision(req_id)
 
     if decision == "allow":
@@ -133,7 +158,6 @@ def main():
     elif decision == "deny":
         print(json.dumps({"decision": "deny"}))
     else:
-        # 超时或无决策 → 回退到终端交互式审批
         print(json.dumps({}))
 
 
