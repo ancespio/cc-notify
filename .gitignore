@@ -2,3 +2,4 @@ __pycache__/
 *.pyc
 mode.json
 config.json
+hook_debug.log
