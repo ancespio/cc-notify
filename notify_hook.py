@@ -36,7 +36,7 @@ def is_permission_request(event):
 
 def send_feishu(tool_name, args_summary, workspace):
     text = (
-        f"<at user_id=\"{OPEN_ID}\">朱宸辉</at>\n"
+        f"<at user_id={OPEN_ID}>朱宸辉</at>\n"
         f"🔐 Claude Code 需要授权\n"
         f"━━━━━━━━━━\n"
         f"工作区: {workspace}\n"
@@ -45,13 +45,12 @@ def send_feishu(tool_name, args_summary, workspace):
         f"━━━━━━━━━━\n"
         f"请打开 Termius 批准或拒绝"
     )
-    content = json.dumps({"text": text})
     subprocess.run(
         [
             LARK_CLI, "im", "+messages-send",
             "--as", "bot",
             "--user-id", OPEN_ID,
-            "--content", content,
+            "--text", text,
             "--msg-type", "text",
         ],
         stdout=subprocess.DEVNULL,
