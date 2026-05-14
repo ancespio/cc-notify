@@ -55,16 +55,21 @@ def extract_tool(event):
     return event.get("tool_name") or event.get("toolName") or "unknown"
 
 
+def sanitize(s):
+    """移除可能破坏 JSON/CMD 的特殊字符."""
+    return s.replace("\\", "/").replace('"', "'")
+
+
 def extract_summary(event, etype):
     """从事件中提取命令/问题摘要."""
     if etype == "elicitation":
         prompt = event.get("prompt") or event.get("question") or ""
-        return str(prompt)[:200]
+        return sanitize(str(prompt)[:200])
     tool_input = event.get("tool_input") or event.get("arguments") or {}
     if isinstance(tool_input, dict):
-        return (tool_input.get("command") or tool_input.get("description") or
-                json.dumps(tool_input, ensure_ascii=False))
-    return str(tool_input)
+        raw = tool_input.get("command") or tool_input.get("description") or ""
+        return sanitize(raw if raw else json.dumps(tool_input, ensure_ascii=False))
+    return sanitize(str(tool_input))
 
 
 def _lark_send(open_id, text):
