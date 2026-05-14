@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""CC-Notify 托盘应用：Windows 常驻托盘图标 + 飞书远程指令监听."""
+"""CC-Notify 托盘应用：Windows 常驻托盘图标 + 飞书事件订阅."""
 import json
 import os
 import subprocess
@@ -7,7 +7,6 @@ import sys
 import threading
 import time
 
-# Windows 无控制台窗口标志
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 from PIL import Image, ImageDraw
@@ -30,7 +29,6 @@ MODES = {
     "ssh-only": ("仅SSH会话", (255, 193, 7)),
     "off": ("关闭", (158, 158, 158)),
 }
-POLL_INTERVAL = 1
 
 
 # ── 状态管理 ──────────────────────────────────────────────
@@ -61,19 +59,15 @@ def save_config(cfg):
         json.dump(cfg, f, ensure_ascii=False)
 
 
-# ── 飞书 API 封装 ──────────────────────────────────────────
+# ── 飞书 API ──────────────────────────────────────────────
 
 def _lark(*args, timeout=10):
-    """调用 lark-cli，返回 (ok, data_dict)."""
     try:
         result = subprocess.run(
             [LARK_CLI] + list(args),
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout,
-            creationflags=CREATE_NO_WINDOW,
+            capture_output=True, text=True,
+            encoding="utf-8", errors="replace",
+            timeout=timeout, creationflags=CREATE_NO_WINDOW,
         )
         if result.returncode != 0:
             return False, None
@@ -83,30 +77,7 @@ def _lark(*args, timeout=10):
         return False, None
 
 
-def discover_chat_id():
-    """通过发一条无声消息来发现 bot-user P2P chat_id."""
-    cfg = load_config()
-    if cfg.get("chat_id"):
-        return cfg["chat_id"]
-
-    content = json.dumps({"text": " "})
-    ok, data = _lark(
-        "im", "+messages-send", "--as", "bot",
-        "--user-id", OPEN_ID,
-        "--content", content, "--msg-type", "text",
-        timeout=15,
-    )
-    if ok and data.get("ok"):
-        chat_id = data.get("data", {}).get("chat_id", "")
-        if chat_id:
-            cfg["chat_id"] = chat_id
-            save_config(cfg)
-            return chat_id
-    return ""
-
-
 def send_reply(message_id, text):
-    """作为 bot 回复消息."""
     _lark(
         "im", "+messages-reply", "--as", "bot",
         "--message-id", message_id,
@@ -115,7 +86,7 @@ def send_reply(message_id, text):
     )
 
 
-# ── 图标生成 ──────────────────────────────────────────────
+# ── 图标 ──────────────────────────────────────────────────
 
 def make_icon(mode):
     color = MODES.get(mode, MODES["ssh-only"])[1]
@@ -127,19 +98,139 @@ def make_icon(mode):
     return img
 
 
-# ── 飞书轮询 ──────────────────────────────────────────────
+# ── 命令处理 ──────────────────────────────────────────────
 
-_last_msg_id = None
+def handle_command(text, msg_id, icon_ref):
+    """解析并执行命令，返回是否已处理."""
+    text = text.strip()
 
+    # ── /approve /deny ──
+    if text.startswith("/approve ") or text.startswith("/deny "):
+        parts = text.split()
+        if len(parts) >= 2:
+            cmd, req_id = parts[0], parts[1]
+            decision = "allow" if cmd == "/approve" else "deny"
+            pending_file = os.path.join(PROJECT_DIR, "pending", f"{req_id}.json")
+            if os.path.exists(pending_file):
+                try:
+                    with open(pending_file, "r", encoding="utf-8") as f:
+                        pd = json.load(f)
+                    pd["decision"] = decision
+                    with open(pending_file, "w", encoding="utf-8") as f:
+                        json.dump(pd, f, ensure_ascii=False)
+                    label = "批准" if decision == "allow" else "拒绝"
+                    send_reply(msg_id, f"已{label}: {pd.get('tool_name')} - {pd.get('args_summary', '')[:50]}")
+                except Exception:
+                    send_reply(msg_id, "审批处理失败")
+            else:
+                send_reply(msg_id, f"请求 {req_id} 不存在或已过期")
+        return True
+
+    # ── /notify ──
+    if not text.startswith("/notify"):
+        return False
+
+    new_mode = None
+    if text == "/notify on":
+        new_mode = "all"
+    elif text == "/notify ssh":
+        new_mode = "ssh-only"
+    elif text == "/notify off":
+        new_mode = "off"
+    elif text == "/notify status":
+        current = load_mode()
+        label = MODES.get(current, ("未知",))[0]
+        send_reply(msg_id, f"CC-Notify 当前模式: {label}")
+        return True
+
+    if new_mode:
+        save_mode(new_mode)
+        label = MODES[new_mode][0]
+        if icon_ref[0] is not None:
+            icon_ref[0].icon = make_icon(new_mode)
+            icon_ref[0].title = f"CC-Notify: {label}"
+        send_reply(msg_id, f"CC-Notify 已切换为: {label}")
+    return True
+
+
+# ── 事件订阅 (实时) ──────────────────────────────────────
+
+def feishu_events(icon_ref):
+    """后台线程：lark-cli event consume 实时监听飞书消息."""
+    while True:
+        try:
+            proc = subprocess.Popen(
+                [LARK_CLI, "event", "consume", "im.message.receive_v1", "--as", "bot"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                creationflags=CREATE_NO_WINDOW,
+            )
+            for line in proc.stdout:
+                line = line.strip()
+                if not line:
+                    continue
+                # 跳过日志行
+                if line.startswith("[event]"):
+                    continue
+                try:
+                    event = json.loads(line)
+                except json.JSONDecodeError:
+                    continue
+
+                msg_type = event.get("type", "")
+                if msg_type != "im.message.receive_v1":
+                    continue
+
+                sender = event.get("sender_id", "")
+                if sender != OPEN_ID:
+                    continue
+
+                content_str = event.get("content", "")
+                try:
+                    body = json.loads(content_str)
+                    text = body.get("text", "")
+                except (json.JSONDecodeError, TypeError):
+                    text = content_str if isinstance(content_str, str) else ""
+
+                msg_id = event.get("message_id", "")
+                handle_command(text, msg_id, icon_ref)
+
+        except Exception:
+            pass
+
+        # 事件订阅断开后等待重连
+        time.sleep(5)
+
+
+# ── 轮询回退 ──────────────────────────────────────────────
 
 def feishu_poll(icon_ref):
-    """后台线程：每 1s 轮询飞书 Bot 聊天，解析 /notify 指令."""
-    global _last_msg_id
-    chat_id = discover_chat_id()
+    """后台线程：HTTP 轮询作为事件订阅的备用."""
+    # 先尝试发现 chat_id
+    cfg = load_config()
+    chat_id = cfg.get("chat_id", "")
+    if not chat_id:
+        # 发一条哑消息来发现
+        ok, data = _lark(
+            "im", "+messages-send", "--as", "bot",
+            "--user-id", OPEN_ID,
+            "--content", json.dumps({"text": " "}), "--msg-type", "text",
+            timeout=15,
+        )
+        if ok and data.get("ok"):
+            chat_id = data.get("data", {}).get("chat_id", "")
+            if chat_id:
+                cfg["chat_id"] = chat_id
+                save_config(cfg)
 
     if not chat_id:
-        return  # 无法获取 chat_id，静默退出轮询
+        return
 
+    last_msg_id = None
     while True:
         try:
             params = json.dumps({
@@ -154,30 +245,23 @@ def feishu_poll(icon_ref):
                 timeout=10,
             )
             if not ok or not data:
-                time.sleep(POLL_INTERVAL)
+                time.sleep(1)
                 continue
 
             items = data.get("data", {}).get("items", [])
             if not items:
-                time.sleep(POLL_INTERVAL)
+                time.sleep(1)
                 continue
 
-            # 去重
             msg_id = items[0].get("message_id", "")
-            if msg_id == _last_msg_id:
-                time.sleep(POLL_INTERVAL)
+            if msg_id == last_msg_id:
+                time.sleep(1)
                 continue
-            _last_msg_id = msg_id
+            last_msg_id = msg_id
 
             for msg in items:
                 sender = msg.get("sender", {}).get("id", "")
-
-                # 只响应义人的指令
                 if sender != OPEN_ID:
-                    continue
-
-                # 跳过 bot 自己的消息
-                if sender == BOT_APP_ID:
                     continue
 
                 body = msg.get("body", {}).get("content", "")
@@ -187,60 +271,12 @@ def feishu_poll(icon_ref):
                 except (json.JSONDecodeError, TypeError):
                     text = body if isinstance(body, str) else ""
 
-                text = text.strip()
                 msg_id_cur = msg.get("message_id", "")
-
-                # ── /approve /deny 审批指令 ──
-                if text.startswith("/approve ") or text.startswith("/deny "):
-                    parts = text.split()
-                    if len(parts) >= 2:
-                        cmd, req_id = parts[0], parts[1]
-                        decision = "allow" if cmd == "/approve" else "deny"
-                        pending_file = os.path.join(PROJECT_DIR, "pending", f"{req_id}.json")
-                        if os.path.exists(pending_file):
-                            try:
-                                with open(pending_file, "r", encoding="utf-8") as f:
-                                    pending_data = json.load(f)
-                                pending_data["decision"] = decision
-                                with open(pending_file, "w", encoding="utf-8") as f:
-                                    json.dump(pending_data, f, ensure_ascii=False)
-                                label = "批准" if decision == "allow" else "拒绝"
-                                send_reply(msg_id_cur, f"已{label}: {pending_data.get('tool_name')} - {pending_data.get('args_summary', '')[:50]}")
-                            except Exception:
-                                send_reply(msg_id_cur, "审批处理失败，请检查请求ID")
-                        else:
-                            send_reply(msg_id_cur, f"请求 {req_id} 不存在或已过期")
-                    continue
-
-                # ── /notify 指令 ──
-                if not text.startswith("/notify"):
-                    continue
-
-                new_mode = None
-                if text == "/notify on":
-                    new_mode = "all"
-                elif text == "/notify ssh":
-                    new_mode = "ssh-only"
-                elif text == "/notify off":
-                    new_mode = "off"
-                elif text == "/notify status":
-                    current = load_mode()
-                    label = MODES.get(current, ("未知",))[0]
-                    send_reply(msg_id_cur, f"CC-Notify 当前模式: {label}")
-                    continue
-
-                if new_mode:
-                    save_mode(new_mode)
-                    label = MODES[new_mode][0]
-                    if icon_ref[0] is not None:
-                        icon_ref[0].icon = make_icon(new_mode)
-                        icon_ref[0].title = f"CC-Notify: {label}"
-                    send_reply(msg_id_cur, f"CC-Notify 已切换为: {label}")
+                handle_command(text, msg_id_cur, icon_ref)
 
         except Exception:
             pass
-
-        time.sleep(POLL_INTERVAL)
+        time.sleep(1)
 
 
 # ── 托盘菜单 ──────────────────────────────────────────────
@@ -255,28 +291,23 @@ def _make_radio_callback(mode, icon_ref):
 
 
 def create_menu(icon_ref):
-    current = load_mode()
-
-    def is_checked(mode):
-        return lambda item: load_mode() == mode
-
     return pystray.Menu(
         pystray.MenuItem(
             "通知: 全部开启",
             _make_radio_callback("all", icon_ref),
-            checked=is_checked("all"),
+            checked=lambda item: load_mode() == "all",
             radio=True,
         ),
         pystray.MenuItem(
             "通知: 仅SSH会话",
             _make_radio_callback("ssh-only", icon_ref),
-            checked=is_checked("ssh-only"),
+            checked=lambda item: load_mode() == "ssh-only",
             radio=True,
         ),
         pystray.MenuItem(
             "通知: 关闭",
             _make_radio_callback("off", icon_ref),
-            checked=is_checked("off"),
+            checked=lambda item: load_mode() == "off",
             radio=True,
         ),
         pystray.Menu.SEPARATOR,
@@ -298,11 +329,12 @@ def main():
     )
     icon_ref[0] = icon
 
-    poll_thread = threading.Thread(
-        target=feishu_poll,
-        args=(icon_ref,),
-        daemon=True,
-    )
+    # 事件订阅（主）
+    ev_thread = threading.Thread(target=feishu_events, args=(icon_ref,), daemon=True)
+    ev_thread.start()
+
+    # 轮询（备用）
+    poll_thread = threading.Thread(target=feishu_poll, args=(icon_ref,), daemon=True)
     poll_thread.start()
 
     icon.run()
