@@ -55,8 +55,8 @@ def extract_tool(event):
 
 def sanitize(s):
     """裁剪到第一个 CMD 特殊字符前，避免被当作命令分隔符."""
-    for sep in (" && ", " & ", "; ", " | ", " < ", " > ", " || "):
-        idx = s.find(sep)
+    for ch in ("|", "&", ";", "<", ">"):
+        idx = s.find(ch)
         if idx > 0:
             return s[:idx] + " ..."
     return s
