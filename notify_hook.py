@@ -144,7 +144,7 @@ def main():
             {"tag": "hr"},
             {
                 "tag": "div",
-                "text": {"tag": "lark_md", "content": f"`/approve {req_id}`  批准\n`/deny {req_id}`  拒绝"}
+                "text": {"tag": "lark_md", "content": "直接回复本条消息：`允许` / `始终允许` / `拒绝`"}
             },
         ],
     }

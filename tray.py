@@ -104,7 +104,30 @@ def handle_command(text, msg_id, icon_ref):
     """解析并执行命令，返回是否已处理."""
     text = text.strip()
 
-    # ── /approve /deny ──
+    # ── 审批指令（中文，匹配最新 pending）──
+    if text in ("允许", "始终允许", "拒绝"):
+        decision = "deny" if text == "拒绝" else "allow"
+        # 找最新的 pending 文件
+        pending_dir = os.path.join(PROJECT_DIR, "pending")
+        try:
+            files = [f for f in os.listdir(pending_dir) if f.endswith(".json")]
+            if files:
+                files.sort(key=lambda f: os.path.getmtime(os.path.join(pending_dir, f)), reverse=True)
+                pending_file = os.path.join(pending_dir, files[0])
+                with open(pending_file, "r", encoding="utf-8") as f:
+                    pd = json.load(f)
+                pd["decision"] = decision
+                with open(pending_file, "w", encoding="utf-8") as f:
+                    json.dump(pd, f, ensure_ascii=False)
+                label = "已批准" if decision == "allow" else "已拒绝"
+                send_reply(msg_id, f"{label}: {pd.get('tool_name')} - {pd.get('args_summary', '')[:50]}")
+            else:
+                send_reply(msg_id, "当前没有待审批的请求")
+        except Exception:
+            send_reply(msg_id, "审批处理失败")
+        return True
+
+    # ── 旧格式 /approve <id> /deny <id>（兼容）──
     if text.startswith("/approve ") or text.startswith("/deny "):
         parts = text.split()
         if len(parts) >= 2:
