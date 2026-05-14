@@ -395,11 +395,7 @@ def main():
     )
     icon_ref[0] = icon
 
-    # 事件订阅（主）
-    ev_thread = threading.Thread(target=feishu_events, args=(icon_ref,), daemon=True)
-    ev_thread.start()
-
-    # 轮询（备用）
+    # 轮询（事件订阅需在飞书开发者后台配置，暂用轮询）
     poll_thread = threading.Thread(target=feishu_poll, args=(icon_ref,), daemon=True)
     poll_thread.start()
 
