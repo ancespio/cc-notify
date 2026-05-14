@@ -36,6 +36,7 @@ def is_permission_request(event):
 
 def send_feishu(tool_name, args_summary, workspace):
     text = (
+        f"<at user_id=\"{OPEN_ID}\">@义人</at>\n"
         f"🔐 Claude Code 需要授权\n"
         f"━━━━━━━━━━\n"
         f"工作区: {workspace}\n"
