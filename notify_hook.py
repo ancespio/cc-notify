@@ -30,7 +30,7 @@ def extract_workspace(event):
 
 def is_permission_request(event):
     """兼容 Claude Code 不同版本的 event 字段格式."""
-    ev = event.get("event") or event.get("hook_event") or ""
+    ev = event.get("hook_event_name") or event.get("event") or event.get("hook_event") or ""
     return ev.lower() in ("permissionrequest", "permission_request")
 
 
@@ -80,11 +80,11 @@ def main():
         return
 
     tool_name = event.get("tool_name") or event.get("toolName") or "unknown"
-    arguments = event.get("arguments") or event.get("args") or ""
-    if isinstance(arguments, dict):
-        args_summary = json.dumps(arguments, ensure_ascii=False)
+    tool_input = event.get("tool_input") or event.get("arguments") or {}
+    if isinstance(tool_input, dict):
+        args_summary = tool_input.get("command") or tool_input.get("description") or json.dumps(tool_input, ensure_ascii=False)
     else:
-        args_summary = str(arguments)
+        args_summary = str(tool_input)
     if len(args_summary) > 200:
         args_summary = args_summary[:197] + "..."
 
