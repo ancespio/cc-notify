@@ -105,11 +105,10 @@ def discover_chat_id():
 
 def send_reply(message_id, text):
     """作为 bot 回复消息."""
-    content = json.dumps({"text": text})
     _lark(
         "im", "+messages-reply", "--as", "bot",
         "--message-id", message_id,
-        "--content", content, "--msg-type", "text",
+        "--text", text, "--msg-type", "text",
         timeout=10,
     )
 
