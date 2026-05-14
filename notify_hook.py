@@ -37,11 +37,13 @@ def extract_workspace(event):
 
 
 def event_type(event):
-    """返回事件类型: permission / elicitation / stop / unknown."""
+    """返回事件类型: permission / pretool / elicitation / stop / unknown."""
     ev = event.get("hook_event_name") or event.get("event") or event.get("hook_event") or ""
     ev = ev.lower()
     if ev in ("permissionrequest", "permission_request"):
         return "permission"
+    if ev in ("pretooluse", "pre_tool_use"):
+        return "pretool"
     if ev in ("elicitation", "elicitation_request"):
         return "elicitation"
     if ev in ("stop",):
@@ -117,6 +119,20 @@ def main():
             f"✅ Claude Code 本轮完成\n"
             f"━━━━━━━━━━\n"
             f"工作区: {workspace}\n"
+            f"━━━━━━━━━━\n"
+            f"{hint}"
+        )
+    elif etype == "pretool":
+        tool_name = extract_tool(event)
+        summary = extract_summary(event, etype)
+        if len(summary) > 200:
+            summary = summary[:197] + "..."
+        text = (
+            f"🔧 Claude Code 执行命令\n"
+            f"━━━━━━━━━━\n"
+            f"工作区: {workspace}\n"
+            f"工具: {tool_name}\n"
+            f"命令: {summary}\n"
             f"━━━━━━━━━━\n"
             f"{hint}"
         )
