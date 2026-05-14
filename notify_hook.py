@@ -66,8 +66,15 @@ def _lark_send(text):
 
 
 def main():
+    # 强制 UTF-8 读 stdin，避免 GBK 乱码
     try:
-        event = json.load(sys.stdin)
+        sys.stdin.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
+
+    try:
+        raw = sys.stdin.read()
+        event = json.loads(raw)
     except json.JSONDecodeError:
         print(json.dumps({}))
         return
@@ -91,6 +98,9 @@ def main():
     if len(summary) > 200:
         summary = summary[:197] + "..."
 
+    ssh = is_ssh_session()
+    hint = "请打开 Termius 处理" if ssh else "请到本地终端处理"
+
     if etype == "elicitation":
         text = (
             f"💬 Claude Code 向你提问\n"
@@ -98,7 +108,7 @@ def main():
             f"工作区: {workspace}\n"
             f"问题: {summary}\n"
             f"━━━━━━━━━━\n"
-            f"请打开 Termius 回复"
+            f"{hint}"
         )
     else:
         text = (
@@ -108,7 +118,7 @@ def main():
             f"工具: {tool_name}\n"
             f"命令: {summary}\n"
             f"━━━━━━━━━━\n"
-            f"请打开 Termius 批准或拒绝"
+            f"{hint}"
         )
 
     _lark_send(text)
