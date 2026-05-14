@@ -37,13 +37,15 @@ def extract_workspace(event):
 
 
 def event_type(event):
-    """返回事件类型: permission / elicitation / unknown."""
+    """返回事件类型: permission / elicitation / stop / unknown."""
     ev = event.get("hook_event_name") or event.get("event") or event.get("hook_event") or ""
     ev = ev.lower()
     if ev in ("permissionrequest", "permission_request"):
         return "permission"
     if ev in ("elicitation", "elicitation_request"):
         return "elicitation"
+    if ev in ("stop",):
+        return "stop"
     return "unknown"
 
 
@@ -107,15 +109,21 @@ def main():
         return
 
     workspace = extract_workspace(event)
-    tool_name = extract_tool(event)
-    summary = extract_summary(event, etype)
-    if len(summary) > 200:
-        summary = summary[:197] + "..."
-
     ssh = is_ssh_session()
     hint = "请打开 Termius 处理" if ssh else "请到本地终端处理"
 
-    if etype == "elicitation":
+    if etype == "stop":
+        text = (
+            f"✅ Claude Code 本轮完成\n"
+            f"━━━━━━━━━━\n"
+            f"工作区: {workspace}\n"
+            f"━━━━━━━━━━\n"
+            f"{hint}"
+        )
+    elif etype == "elicitation":
+        summary = extract_summary(event, etype)
+        if len(summary) > 200:
+            summary = summary[:197] + "..."
         text = (
             f"💬 Claude Code 向你提问\n"
             f"━━━━━━━━━━\n"
@@ -125,6 +133,10 @@ def main():
             f"{hint}"
         )
     else:
+        tool_name = extract_tool(event)
+        summary = extract_summary(event, etype)
+        if len(summary) > 200:
+            summary = summary[:197] + "..."
         text = (
             f"🔐 Claude Code 需要授权\n"
             f"━━━━━━━━━━\n"
