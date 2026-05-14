@@ -73,6 +73,15 @@ Add to / 添加到 `~/.claude/settings.json`:
 ```json
 {
   "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [{
+          "type": "command",
+          "command": "python \"C:/absolute/path/to/cc-notify/notify_hook.py\""
+        }]
+      }
+    ],
     "PermissionRequest": [
       {
         "matcher": "*",
@@ -83,6 +92,15 @@ Add to / 添加到 `~/.claude/settings.json`:
       }
     ],
     "Elicitation": [
+      {
+        "matcher": "*",
+        "hooks": [{
+          "type": "command",
+          "command": "python \"C:/absolute/path/to/cc-notify/notify_hook.py\""
+        }]
+      }
+    ],
+    "Stop": [
       {
         "matcher": "*",
         "hooks": [{
