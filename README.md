@@ -1,8 +1,8 @@
 # CC-Notify on Lark CLI
 
-> **Claude Code + 飞书 CLI** — 通过 Claude Code Hook 将权限请求（PermissionRequest）、提问事件（Elicitation）、任务完成（Stop）实时推送到飞书，支持飞书端远程开关。覆盖所有用户需介入的场景。
+> **Claude Code + 飞书 CLI** — 通过 `permissions.ask: ["Bash"]` 强制每次 Bash 弹窗，配合 PermissionRequest + Elicitation + Stop Hook，将所有用户需介入的场景（权限审批、提问、任务完成）实时推送到飞书，支持远程开关。
 
-> **Claude Code + Feishu CLI** — Push permission requests, elicitations, and turn completions to Feishu via hooks. Covers all user-intervention scenarios. Remote toggle supported.
+> **Claude Code + Feishu CLI** — Uses `permissions.ask: ["Bash"]` to force Bash permission dialogs, with PermissionRequest + Elicitation + Stop hooks pushing all user-intervention events to Feishu. Remote toggle supported.
 
 ## Abstract / 摘要
 
@@ -27,7 +27,7 @@ Hook 脚本和托盘应用**独立运行**——通知由 Hook 触发，不需�
 
 Copy this to your AI agent (Claude Code, Cursor, etc.):
 
-> 帮我在 Windows 上部署 CC-Notify：1) 确认已安装 `lark-cli`（`npm install -g @larksuite/cli`）并已登录；2) `git clone https://github.com/ancespio/cc-notify.git`；3) `cd cc-notify && pip install pystray Pillow`；4) 运行 `python -c "import subprocess,json,os; lark=os.path.join(os.environ['APPDATA'],'npm','lark-cli.cmd'); r=subprocess.run([lark,'api','GET','/open-apis/authen/v1/user_info'],capture_output=True,text=True,encoding='utf-8'); print(json.loads(r.stdout)['data']['open_id'])"` 获取 open_id，写入 `config.json`（格式 `{"open_id":"ou_xxx","chat_id":""}`）；5) 在 `~/.claude/settings.json` 的 `hooks` 中添加 `PermissionRequest`、`Elicitation`、`Stop` 三个 Hook，command 指向 `notify_hook.py` 的绝对路径。
+> 帮我在 Windows 上部署 CC-Notify：1) 确认已安装 `lark-cli`（`npm install -g @larksuite/cli`）并已登录；2) `git clone https://github.com/ancespio/cc-notify.git`；3) `cd cc-notify && pip install pystray Pillow`；4) 运行 `python -c "import subprocess,json,os; lark=os.path.join(os.environ['APPDATA'],'npm','lark-cli.cmd'); r=subprocess.run([lark,'api','GET','/open-apis/authen/v1/user_info'],capture_output=True,text=True,encoding='utf-8'); print(json.loads(r.stdout)['data']['open_id'])"` 获取 open_id，写入 `config.json`（格式 `{"open_id":"ou_xxx","chat_id":""}`）；5) 在 `~/.claude/settings.json` 中添加 `permissions.ask: ["Bash"]` 和 `PermissionRequest`、`Elicitation`、`Stop` 三个 Hook，command 指向 `notify_hook.py` 的绝对路径。
 
 ## Prerequisites / 前提
 
@@ -72,6 +72,9 @@ Add to / 添加到 `~/.claude/settings.json`:
 
 ```json
 {
+  "permissions": {
+    "ask": ["Bash"]
+  },
   "hooks": {
     "PermissionRequest": [
       {
@@ -104,7 +107,11 @@ Add to / 添加到 `~/.claude/settings.json`:
 }
 ```
 
-**Important**: Hook changes take effect after restarting Claude Code / Hook 修改后需重启 Claude Code。
+> `permissions.ask: ["Bash"]` 是关键配置——强制每次 Bash 命令弹出权限确认，确保 PermissionRequest Hook 无条件触发。不加则 Bash 有 allow 规则时会跳过 Hook。
+
+> `permissions.ask: ["Bash"]` is required — it forces a permission dialog for every Bash call, ensuring PermissionRequest fires unconditionally. Without it, auto-allowed Bash commands bypass the hook.
+
+**Important**: Hook + permission changes take effect after restarting Claude Code / 修改后需重启 Claude Code。
 
 ## Configuration / 配置
 
