@@ -139,7 +139,7 @@ def main():
             },
             {
                 "tag": "div",
-                "text": {"tag": "lark_md", "content": f"**命令**\n```{args_summary[:300]}```"}
+                "text": {"tag": "lark_md", "content": f"**命令**\n{args_summary[:300]}"}
             },
             {"tag": "hr"},
             {
