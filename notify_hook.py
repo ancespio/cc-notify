@@ -1,18 +1,14 @@
 #!/usr/bin/env python
-"""CC-Notify Hook: 监听 Claude Code PermissionRequest，飞书卡片推送 + 远程审批."""
+"""CC-Notify Hook: 监听 Claude Code 权限/提问事件，飞书推送通知."""
 import json
 import os
 import subprocess
 import sys
-import time
-import uuid
 
 MODE_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "mode.json")
-PENDING_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "pending")
 OPEN_ID = "ou_REDACTED"
 LARK_CLI = os.path.join(os.environ.get("APPDATA", ""), "npm", "lark-cli.cmd")
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
-APPROVE_TIMEOUT = 60
 
 
 def load_mode():
@@ -28,29 +24,37 @@ def is_ssh_session():
 
 
 def extract_workspace(event):
-    cwd = event.get("cwd", "") or os.getcwd()
-    return os.path.basename(cwd)
+    return os.path.basename(event.get("cwd", "") or os.getcwd())
 
 
-def is_permission_request(event):
+def event_type(event):
+    """返回事件类型: permission / elicitation / unknown."""
     ev = event.get("hook_event_name") or event.get("event") or event.get("hook_event") or ""
-    return ev.lower() in ("permissionrequest", "permission_request")
+    ev = ev.lower()
+    if ev in ("permissionrequest", "permission_request"):
+        return "permission"
+    if ev in ("elicitation", "elicitation_request"):
+        return "elicitation"
+    return "unknown"
 
 
-def _lark_send_card(card):
-    """发送交互卡片."""
-    content = json.dumps(card, ensure_ascii=False)
-    subprocess.run(
-        [LARK_CLI, "im", "+messages-send", "--as", "bot",
-         "--user-id", OPEN_ID, "--content", content, "--msg-type", "interactive"],
-        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-        encoding="utf-8", errors="replace",
-        timeout=10, creationflags=CREATE_NO_WINDOW,
-    )
+def extract_tool(event):
+    return event.get("tool_name") or event.get("toolName") or "unknown"
 
 
-def _lark_send_text(text):
-    """发送纯文本消息."""
+def extract_summary(event, etype):
+    """从事件中提取命令/问题摘要."""
+    if etype == "elicitation":
+        prompt = event.get("prompt") or event.get("question") or ""
+        return str(prompt)[:200]
+    tool_input = event.get("tool_input") or event.get("arguments") or {}
+    if isinstance(tool_input, dict):
+        return (tool_input.get("command") or tool_input.get("description") or
+                json.dumps(tool_input, ensure_ascii=False))
+    return str(tool_input)
+
+
+def _lark_send(text):
     content = json.dumps({"text": text})
     subprocess.run(
         [LARK_CLI, "im", "+messages-send", "--as", "bot",
@@ -61,26 +65,6 @@ def _lark_send_text(text):
     )
 
 
-def wait_for_decision(req_id, timeout=APPROVE_TIMEOUT):
-    """轮询 pending 文件，等待 tray 写入决策."""
-    decision_file = os.path.join(PENDING_DIR, f"{req_id}.json")
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        try:
-            with open(decision_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            os.remove(decision_file)
-            return data.get("decision", "")
-        except (FileNotFoundError, json.JSONDecodeError):
-            pass
-        time.sleep(1)
-    try:
-        os.remove(decision_file)
-    except FileNotFoundError:
-        pass
-    return ""
-
-
 def main():
     try:
         event = json.load(sys.stdin)
@@ -88,7 +72,8 @@ def main():
         print(json.dumps({}))
         return
 
-    if not is_permission_request(event):
+    etype = event_type(event)
+    if etype == "unknown":
         print(json.dumps({}))
         return
 
@@ -100,65 +85,34 @@ def main():
         print(json.dumps({}))
         return
 
-    tool_name = event.get("tool_name") or event.get("toolName") or "unknown"
-    tool_input = event.get("tool_input") or event.get("arguments") or {}
-    if isinstance(tool_input, dict):
-        args_summary = tool_input.get("command") or tool_input.get("description") or json.dumps(tool_input, ensure_ascii=False)
-    else:
-        args_summary = str(tool_input)
-    if len(args_summary) > 200:
-        args_summary = args_summary[:197] + "..."
-
     workspace = extract_workspace(event)
-    req_id = uuid.uuid4().hex[:8]
+    tool_name = extract_tool(event)
+    summary = extract_summary(event, etype)
+    if len(summary) > 200:
+        summary = summary[:197] + "..."
 
-    # 写 pending 文件
-    os.makedirs(PENDING_DIR, exist_ok=True)
-    pending_file = os.path.join(PENDING_DIR, f"{req_id}.json")
-    with open(pending_file, "w", encoding="utf-8") as f:
-        json.dump({
-            "req_id": req_id, "tool_name": tool_name,
-            "args_summary": args_summary, "workspace": workspace,
-            "decision": "",
-        }, f, ensure_ascii=False)
-
-    # 发送交互卡片
-    card = {
-        "config": {"wide_screen_mode": True},
-        "header": {
-            "title": {"tag": "plain_text", "content": "🔐 Claude Code 需要授权"},
-            "template": "blue",
-        },
-        "elements": [
-            {
-                "tag": "div",
-                "fields": [
-                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**工作区**\n{workspace}"}},
-                    {"is_short": True, "text": {"tag": "lark_md", "content": f"**工具**\n{tool_name}"}},
-                ]
-            },
-            {
-                "tag": "div",
-                "text": {"tag": "lark_md", "content": f"**命令**\n{args_summary[:300]}"}
-            },
-            {"tag": "hr"},
-            {
-                "tag": "div",
-                "text": {"tag": "lark_md", "content": "直接回复本条消息：`允许` / `始终允许` / `拒绝`"}
-            },
-        ],
-    }
-    _lark_send_card(card)
-
-    # 等待审批
-    decision = wait_for_decision(req_id)
-
-    if decision == "allow":
-        print(json.dumps({"decision": "allow"}))
-    elif decision == "deny":
-        print(json.dumps({"decision": "deny"}))
+    if etype == "elicitation":
+        text = (
+            f"💬 Claude Code 向你提问\n"
+            f"━━━━━━━━━━\n"
+            f"工作区: {workspace}\n"
+            f"问题: {summary}\n"
+            f"━━━━━━━━━━\n"
+            f"请打开 Termius 回复"
+        )
     else:
-        print(json.dumps({}))
+        text = (
+            f"🔐 Claude Code 需要授权\n"
+            f"━━━━━━━━━━\n"
+            f"工作区: {workspace}\n"
+            f"工具: {tool_name}\n"
+            f"命令: {summary}\n"
+            f"━━━━━━━━━━\n"
+            f"请打开 Termius 批准或拒绝"
+        )
+
+    _lark_send(text)
+    print(json.dumps({}))
 
 
 if __name__ == "__main__":
