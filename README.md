@@ -111,6 +111,10 @@ Add to / 添加到 `~/.claude/settings.json`:
 
 > `permissions.ask: ["Bash"]` is required — it forces a permission dialog for every Bash call, ensuring PermissionRequest fires unconditionally. Without it, auto-allowed Bash commands bypass the hook.
 
+> 命令中的 CMD 特殊字符（`|` `&` `;` `<` `>`）会被自动裁剪为 `...`，避免破坏飞书消息传输。通知只做提醒，实际审批仍在终端进行。
+
+> CMD special characters (`|` `&` `;` `<` `>`) in commands are auto-truncated to avoid breaking Feishu message delivery.
+
 **Important**: Hook + permission changes take effect after restarting Claude Code / 修改后需重启 Claude Code。
 
 ## Configuration / 配置
