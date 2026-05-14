@@ -3,3 +3,5 @@ __pycache__/
 mode.json
 config.json
 hook_debug.log
+pending/
+hook_debug.log

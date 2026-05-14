@@ -70,6 +70,8 @@ def _lark(*args, timeout=10):
             [LARK_CLI] + list(args),
             capture_output=True,
             text=True,
+            encoding="utf-8",
+            errors="replace",
             timeout=timeout,
             creationflags=CREATE_NO_WINDOW,
         )
@@ -186,10 +188,33 @@ def feishu_poll(icon_ref):
                     text = body if isinstance(body, str) else ""
 
                 text = text.strip()
-                if not text.startswith("/notify"):
+                msg_id_cur = msg.get("message_id", "")
+
+                # ── /approve /deny 审批指令 ──
+                if text.startswith("/approve ") or text.startswith("/deny "):
+                    parts = text.split()
+                    if len(parts) >= 2:
+                        cmd, req_id = parts[0], parts[1]
+                        decision = "allow" if cmd == "/approve" else "deny"
+                        pending_file = os.path.join(PROJECT_DIR, "pending", f"{req_id}.json")
+                        if os.path.exists(pending_file):
+                            try:
+                                with open(pending_file, "r", encoding="utf-8") as f:
+                                    pending_data = json.load(f)
+                                pending_data["decision"] = decision
+                                with open(pending_file, "w", encoding="utf-8") as f:
+                                    json.dump(pending_data, f, ensure_ascii=False)
+                                label = "批准" if decision == "allow" else "拒绝"
+                                send_reply(msg_id_cur, f"已{label}: {pending_data.get('tool_name')} - {pending_data.get('args_summary', '')[:50]}")
+                            except Exception:
+                                send_reply(msg_id_cur, "审批处理失败，请检查请求ID")
+                        else:
+                            send_reply(msg_id_cur, f"请求 {req_id} 不存在或已过期")
                     continue
 
-                msg_id_cur = msg.get("message_id", "")
+                # ── /notify 指令 ──
+                if not text.startswith("/notify"):
+                    continue
 
                 new_mode = None
                 if text == "/notify on":
