@@ -1,0 +1,3 @@
+' Copy this file to start_tray.vbs and adjust paths for your system.
+' 将此文件复制为 start_tray.vbs 并根据你的系统调整路径。
+CreateObject("WScript.Shell").Run "C:\YOUR\PATH\TO\pythonw.exe ""C:\YOUR\PATH\TO\cc-notify\tray.py""", 0, False

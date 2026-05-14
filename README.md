@@ -58,7 +58,12 @@ echo '{"open_id":"ou_YOUR_ID","chat_id":""}' > config.json
 echo '{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo test"},"cwd":"."}' | python notify_hook.py
 
 # Start tray (optional / 可选)
+# Method 1: Direct launch / 直接启动
 pythonw tray.py
+
+# Method 2: Copy VBS template, adjust paths, double-click to run
+# 复制 VBS 模板，调整路径，双击运行
+copy start_tray.vbs.example start_tray.vbs
 ```
 
 ## Hook Setup / Hook 配置
@@ -129,13 +134,14 @@ Send in Feishu bot chat (requires tray running) / 需托盘运行：
 
 ```
 cc-notify/
-├── notify_hook.py       # Hook script (required / 必需)
-├── tray.py              # Tray app (optional, for remote commands)
-├── setup_guide.py       # Auto-install script / 自动安装脚本
-├── start_tray.vbs       # Windows silent launcher / 无窗口启动
-├── config.example.json  # Config template / 配置模板
-├── config.json          # (gitignored — your credentials)
-└── mode.json            # (gitignored — runtime state)
+├── notify_hook.py          # Hook script (required / 必需)
+├── tray.py                 # Tray app (optional, for remote commands)
+├── setup_guide.py          # Auto-install script / 自动安装脚本
+├── config.example.json     # Config template / 配置模板
+├── start_tray.vbs.example  # VBS template / VBS 模板 (copy to start_tray.vbs)
+├── config.json             # (gitignored — your credentials)
+├── mode.json               # (gitignored — runtime state)
+└── start_tray.vbs          # (gitignored — your local launcher)
 ```
 
 Runtime directories (`pending/`, `__pycache__/`) are created on demand and gitignored.
