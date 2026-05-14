@@ -1,7 +1,14 @@
-# CC-Notify / CC-Notify
+# CC-Notify on Lark CLI
 
-> **Claude Code + 飞书 CLI 专用** — 通过 Claude Code Hook 将权限请求和提问事件实时推送到飞书。
-> **Claude Code + Feishu CLI only** — Push Claude Code permission requests and elicitation events to Feishu in real time via hooks.
+> **Claude Code + 飞书 CLI** — 通过 Claude Code Hook 将权限请求、提问事件、任务完成通知实时推送到飞书，支持飞书端远程开关。不替代终端交互，只做 SSH 远程场景下的注意力补位。
+
+> **Claude Code + Feishu CLI** — Push Claude Code permission requests, elicitation events, and turn-completion notifications to Feishu in real time via hooks. Remote toggle supported. Designed as an attention bridge for SSH relay workflows, not a terminal replacement.
+
+## Abstract / 摘要
+
+Controlling Claude Code on mobile devices typically requires a public IP and monitoring scripts. Tools like cc-connect bridge agents into IM platforms such as Feishu and WeChat, enabling control without a public IP. However, these tools rely on file-based session creation and cannot unify conversation history, making session management chaotic—they function best as pure IM-side bots. The official Claude app supports true mobile continuation but is exclusive to Pro subscribers. For relay work across locations, the most reliable approach remains NAT traversal (Tailscale) + SSH (Termius), which provides multi-device sync, command history, and AI-assisted input. Yet in non-office settings, attention is easily diverted—missed permission requests, elicitations, and task completions stall progress. Termius offers no native notification mechanism. This project proposes a new collaboration paradigm: combining IM tools with Claude Code's Hook interface to deliver stable notifications under complex network conditions. The tool is reliable in Claude Code + Feishu environments and supports remote on/off control via Feishu messages. Ablation experiments suggest compatibility potential with other agent tools and messaging platforms.
+
+> 想在移动设备上控制 Claude Code 往往需要公网 IP。cc-connect 等工具通过 IM 将 Agent 接入飞书/微信，但基于文件的会话机制导致记录无法统一、管理混乱，仅适合纯 IM 端机器人。官方 Claude App 支持移动端接力但仅限 Pro 订阅。目前最可靠的接力方案仍是 Tailscale 内网穿透 + Termius SSH——多端同步、指令保存、AI 智能撰写。但在非办公场景下注意力容易被转移，导致错过权限申请、提问或任务完成通知。Termius 无原生提醒接口。本工作将 IM 工具与 Claude Code Hook 结合，在复杂网络环境下实现稳定通知播报，支持飞书端远程开关，消融实验表明对多 Agent 和多消息平台具有兼容潜力。
 
 ## How It Works / 工作原理
 
@@ -124,7 +131,7 @@ Send in Feishu bot chat (requires tray running) / 需托盘运行：
 cc-notify/
 ├── notify_hook.py       # Hook script (required / 必需)
 ├── tray.py              # Tray app (optional, for remote commands)
-├── hook_debug.py        # Debug tool / 诊断工具
+├── setup_guide.py       # Auto-install script / 自动安装脚本
 ├── start_tray.vbs       # Windows silent launcher / 无窗口启动
 ├── config.example.json  # Config template / 配置模板
 ├── config.json          # (gitignored — your credentials)
