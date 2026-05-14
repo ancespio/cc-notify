@@ -38,9 +38,10 @@ def is_permission_request(event):
 
 
 def _lark_send(text):
+    content = json.dumps({"text": text})
     subprocess.run(
         [LARK_CLI, "im", "+messages-send", "--as", "bot",
-         "--user-id", OPEN_ID, "--text", text, "--msg-type", "text"],
+         "--user-id", OPEN_ID, "--content", content, "--msg-type", "text"],
         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
         encoding="utf-8", errors="replace",
         timeout=10, creationflags=CREATE_NO_WINDOW,
