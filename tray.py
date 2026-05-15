@@ -410,6 +410,18 @@ def main():
     poll_thread = threading.Thread(target=feishu_poll, args=(icon_ref,), daemon=True)
     poll_thread.start()
 
+    # 看门狗：定期刷新图标防 Windows 系统托盘重建后消失
+    def icon_watchdog():
+        while True:
+            time.sleep(60)
+            try:
+                if icon_ref[0] is not None:
+                    icon_ref[0].visible = True
+            except Exception:
+                pass
+    watchdog = threading.Thread(target=icon_watchdog, daemon=True)
+    watchdog.start()
+
     icon.run()
 
 
