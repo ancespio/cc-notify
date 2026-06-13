@@ -1,47 +1,43 @@
-# Bark Codex Link Design
+# Bark 点击跳转 Codex 设计
 
-## Goal
+## 目标
 
-Make every Agent-Notify Bark notification open Codex when tapped, while
-preserving a reliable browser fallback and allowing the destination to be
-changed by the user.
+让每条 Agent-Notify Bark 通知在点击后打开 Codex，同时保留可靠的网页
+回退能力，并允许用户自行修改跳转地址。
 
-## Behavior
+## 行为
 
-- The default Bark notification URL is `https://chatgpt.com/codex`.
-- The Windows installer shows a notification destination field prefilled with
-  that URL.
-- The desktop configuration application exposes the same field.
-- A custom non-empty destination is saved to
-  `providers.bark.url` in `config.json`.
-- Leaving the field empty restores the default Codex URL.
-- Bark receives the destination through its documented `url` payload field.
+- Bark 通知默认跳转到 `https://chatgpt.com/codex`。
+- Windows 安装器显示“点击通知跳转”字段，并预填默认地址。
+- 桌面配置程序提供相同字段。
+- 非空的自定义地址保存到 `config.json` 的
+  `providers.bark.url`。
+- 字段留空时恢复默认 Codex 地址。
+- Bark 通知通过官方支持的 `url` 参数携带跳转地址。
 
-## Deep-Link Boundary
+## 深链边界
 
-Agent-Notify will not generate `codex://threads/<session UUID>` links in this
-version. OpenAI documents that scheme for the Codex app, but does not guarantee
-that ChatGPT on iOS handles it. The HTTPS Codex URL can be handled as a
-Universal Link when supported and otherwise opens safely in the browser.
+本版本不生成 `codex://threads/<session UUID>`。OpenAI 已记录该协议可由
+Codex App 打开，但没有保证 iOS 上的 ChatGPT 会处理它。HTTPS Codex
+地址在系统支持时可以作为 Universal Link 打开 App，否则会安全地回退到
+浏览器。
 
-The link is not thread-specific. Mapping a local hook session UUID to a mobile
-Codex thread is deferred until OpenAI documents a supported mobile link format.
+本次跳转不定位具体线程。只有在 OpenAI 公布受支持的移动端线程链接格式后，
+才考虑将本地 Hook 的会话 UUID 映射为移动端 Codex 线程。
 
-## Compatibility
+## 兼容性
 
-Existing configurations with an explicitly configured Bark URL keep their
-value. Existing configurations whose URL is missing or empty receive the
-default Codex destination when settings are saved or installation is rerun.
+已有配置中明确设置的 Bark URL 保持不变。已有配置缺少 URL 或 URL 为空时，
+在重新保存设置或再次安装后写入默认 Codex 地址。
 
-Notification delivery remains fail-open. An invalid custom destination does
-not block Codex or Claude Code hook execution.
+通知仍采用 fail-open。用户填写的自定义地址无效时，不阻塞 Codex 或
+Claude Code 的 Hook 执行。
 
-## Testing
+## 测试
 
-- Default configuration contains `https://chatgpt.com/codex`.
-- Bark payloads include the configured `url`.
-- Desktop settings save both default and custom destinations.
-- Installer requests persist the destination.
-- Installer source exposes the field and increments the application version.
-- README documents the tap behavior, browser fallback, and lack of
-  thread-specific mobile deep links.
+- 默认配置包含 `https://chatgpt.com/codex`。
+- Bark 请求体包含配置的 `url`。
+- 桌面设置可以保存默认或自定义跳转地址。
+- 安装请求可以持久化跳转地址。
+- 安装器显示该字段并递增应用版本。
+- README 使用中文说明点击行为、浏览器回退和暂不支持具体线程深链。
