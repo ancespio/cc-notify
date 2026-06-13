@@ -1,6 +1,6 @@
 # Agent-Notify
 
-Agent-Notify v1.0.0 将 Codex 和 Claude Code 的权限申请、结构化提问与任务
+Agent-Notify v1.0.1 将 Codex 和 Claude Code 的权限申请、结构化提问与任务
 完成事件推送到 Bark 或飞书，并可通过飞书远程切换两种渠道的通知模式。
 
 它不依赖 Codex App 自身的远程通知，因此通知是否送达不受线程新旧或桌面端当前
@@ -8,11 +8,11 @@ Agent-Notify v1.0.0 将 Codex 和 Claude Code 的权限申请、结构化提问�
 
 ## Windows 安装
 
-1. 下载并双击 `Agent-Notify-Setup-v1.0.0.exe`。
+1. 下载并双击 `Agent-Notify-Setup-v1.0.1.exe`。
 2. 选择安装目录，默认是 `C:\Program Files\Agent-Notify`。
-3. 安装完成后打开设置窗口。
-4. 在 Bark、飞书、Agent 与程序三个标签页中配置所需功能。
-5. 保存并应用，随后重启所选 Agent。
+3. 安装完成后自动打开五步首次配置向导。
+4. 按需配置 Bark、飞书、Agent Hook 与登录自启动；任意渠道均可跳过。
+5. 完成向导后重启已安装 Hook 的 Agent。
 
 Bark 与飞书都不是必选项，可以仅启用其中一个、同时启用、全部关闭，或只启用
 飞书远程控制。
@@ -20,16 +20,40 @@ Bark 与飞书都不是必选项，可以仅启用其中一个、同时启用、
 首次配置 Bark：
 
 1. 在 iPhone 安装 Bark，并复制设备 Key。
-2. 在 Bark 标签页启用通知并填写 Key。
+2. 在 Bark 标签页启用通知并填写 Key；“显示”开关可反复切换且不会丢失内容。
 3. 选择全部通知、仅 SSH 或关闭。
-4. 点击“发送 Bark 测试通知”。
+4. 点击“校验图标”，确认远程图片可下载、可解码且尺寸合规。
+5. 点击“发送 Bark 测试通知”，检查 iPhone 通知是否使用 Agent-Notify 自有图标。
+
+如果升级后仍看到 `chatgpt://codex` 或 Bark 官方图标地址，设置页只显示
+“旧版配置”提示，不会自动覆盖非空配置。点击“恢复新版默认”可主动改为：
+
+```text
+跳转：chatgpt://
+图标：https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.1/assets/agent-notify.png
+```
 
 首次配置飞书：
 
-1. 安装并登录 `lark-cli`。
-2. 在飞书标签页填写 `lark-cli` 路径与当前用户的 `open_id`。
-3. 按需启用飞书通知、飞书远程控制或两者。
-4. 点击“连接并发送测试消息”，程序会保存返回的 `chat_id`。
+飞书配置使用 [lark-cli 官方流程](https://github.com/larksuite/cli)。
+设置页和首次向导提供对应的分步按钮，命令会在可见 PowerShell 窗口中运行：
+
+1. 点击“1. 安装”，对应：
+   `npx @larksuite/cli@latest install`
+2. 点击“2. 初始化”，对应：
+   `lark-cli config init`
+3. 点击“3. 登录”，对应：
+   `lark-cli auth login --recommend`
+4. 点击“4. 重新检测”，程序执行：
+   `lark-cli auth status`
+5. 登录成功后点击“自动获取 open_id”，程序执行：
+   `lark-cli api GET /open-apis/authen/v1/user_info --as user --format json`
+6. 确认自动填写的 `open_id`，再点击“连接并发送测试消息”。
+7. Agent-Notify 从连接消息响应自动保存只读的 `chat_id`，用户无需自行查找。
+
+这些交互命令不会静默执行。Agent-Notify 不接触飞书密码或登录令牌；
+`open_id` 自动获取失败时，可以运行上述 `user_info` 命令并手动填写返回结果中的
+`open_id`。
 
 安装过程本身不要求填写通知凭据。设置窗口是唯一的配置入口：
 
@@ -147,7 +171,7 @@ chatgpt://
       "device_key": "YOUR_BARK_DEVICE_KEY",
       "group": "Agent-Notify",
       "url": "chatgpt://",
-      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.0/assets/agent-notify.png",
+      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.1/assets/agent-notify.png",
       "timeout": 8
     },
     "feishu": {
@@ -173,7 +197,10 @@ chatgpt://
 ```
 
 `mode` 可取 `all`、`ssh-only`、`off`。设置窗口支持自建 Bark 服务和自定义
-通知图标 URL。
+通知图标 URL。设置页会限制图标下载大小和超时，仅接受可解码的 PNG、JPEG 或
+WebP，并检查图片尺寸。默认远程图标还必须与安装包内
+`agent-notify.png` 的 SHA-256 一致。Hook 运行时不会重复联网预检，以免阻塞
+Agent；只有手动校验和 Bark 测试通知会执行完整校验。
 
 Windows 程序、托盘、安装器和 Bark 通知默认使用 Agent-Notify 自有图标：
 浅色底、深色通知铃、白色终端符号与珊瑚色提醒点。
@@ -218,12 +245,21 @@ iscc installer\Agent-Notify.iss
 最终安装包生成在：
 
 ```text
-dist-installer\Agent-Notify-Setup-v1.0.0.exe
+dist-installer\Agent-Notify-Setup-v1.0.1.exe
 ```
 
 ## 常见问题
 
+- Bark Key 无法查看：v1.0.1 使用隐藏/明文双文本框切换；旧版动态修改
+  `TE_PASSWORD` 的方式在 Windows 上无效。
+- 图标校验失败：确认 URL 直接返回图片而非 HTML，文件不超过 2 MB，尺寸在
+  64 到 4096 像素之间。
 - 没有 Bark 通知：检查 Bark 是否启用、Key 是否正确，以及模式是否为关闭。
+- `lark-cli` 未就绪：依次执行安装、初始化、登录，并用
+  `lark-cli auth status` 检查。
+- 无法自动获取 `open_id`：运行 README 中的 `user_info` 命令，将返回值里的
+  `open_id` 手动填入。
+- `chat_id` 为空：点击“连接并发送测试消息”；它由响应自动建立，不需要查询。
 - 没有飞书通知：确认 `lark-cli` 已登录、`open_id` 正确并完成连接测试。
 - 飞书命令无响应：确认远程控制开关已开启，且消息来自配置的用户私聊。
 - 修改 Hook 后无效果：重启 Codex 或 Claude Code；Codex 还需在 `/hooks`
@@ -232,7 +268,7 @@ dist-installer\Agent-Notify-Setup-v1.0.0.exe
 
 ## 远程批准限制
 
-Bark 不提供自定义“允许”和“拒绝”通知按钮，因此 Agent-Notify v1.0.0 只负责通知，
+Bark 不提供自定义“允许”和“拒绝”通知按钮，因此 Agent-Notify v1.0.1 只负责通知，
 批准操作仍需在 Codex 或 Claude Code 中完成。Apple Watch 是否镜像 Bark
 通知取决于 iPhone 与 Apple Watch 的通知设置。
 

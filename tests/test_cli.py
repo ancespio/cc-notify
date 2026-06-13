@@ -141,6 +141,8 @@ class DesktopHookCliTests(unittest.TestCase):
                 "--tray",
                 "--smoke-test",
                 "--settings-smoke-test",
+                "--onboarding",
+                "--onboarding-smoke-test",
                 "--enable-autostart",
                 "--disable-autostart",
                 "--stop-tray",
@@ -150,6 +152,8 @@ class DesktopHookCliTests(unittest.TestCase):
         self.assertTrue(args.tray)
         self.assertTrue(args.smoke_test)
         self.assertTrue(args.settings_smoke_test)
+        self.assertTrue(args.onboarding)
+        self.assertTrue(args.onboarding_smoke_test)
         self.assertTrue(args.enable_autostart)
         self.assertTrue(args.disable_autostart)
         self.assertTrue(args.stop_tray)
@@ -170,6 +174,24 @@ class DesktopHookCliTests(unittest.TestCase):
 
         self.assertEqual(result, 0)
         run_app_mock.assert_called_once_with(smoke_test=True)
+
+    @patch("desktop_hook.run_settings_app", return_value=0)
+    def test_onboarding_opens_wizard(self, run_app_mock):
+        result = desktop_hook.main(["--onboarding"])
+
+        self.assertEqual(result, 0)
+        run_app_mock.assert_called_once_with(
+            smoke_test=False, onboarding=True
+        )
+
+    @patch("desktop_hook.run_settings_app", return_value=0)
+    def test_onboarding_smoke_test_opens_real_wizard(self, run_app_mock):
+        result = desktop_hook.main(["--onboarding-smoke-test"])
+
+        self.assertEqual(result, 0)
+        run_app_mock.assert_called_once_with(
+            smoke_test=True, onboarding=True
+        )
 
     def test_command_smoke_test_returns_success(self):
         result = desktop_hook.main(["--smoke-test"])

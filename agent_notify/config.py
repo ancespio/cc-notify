@@ -13,7 +13,7 @@ from filelock import FileLock
 DEFAULT_BARK_URL = "chatgpt://"
 DEFAULT_AGENT_ICON_URL = (
     "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
-    "v1.0.0/assets/agent-notify.png"
+    "v1.0.1/assets/agent-notify.png"
 )
 DEFAULT_BARK_ICON_URL = DEFAULT_AGENT_ICON_URL
 VALID_MODES = {"all", "ssh-only", "off"}

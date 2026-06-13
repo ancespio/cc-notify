@@ -3,16 +3,54 @@ import tempfile
 import unittest
 from pathlib import Path
 
+import wx
+
 from agent_notify.config import DEFAULT_BARK_ICON_URL
 from desktop_app import (
+    SecretField,
     SettingsValues,
     apply_settings,
+    legacy_bark_warnings,
     load_settings_values,
     validate_settings,
 )
 
 
 class DesktopAppServiceTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.app = wx.App(False)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.app.Destroy()
+
+    def test_secret_field_switches_without_losing_edited_value(self):
+        frame = wx.Frame(None)
+        field = SecretField(frame, "first-secret")
+        try:
+            field.show_plain_text(True)
+            self.assertEqual(field.GetValue(), "first-secret")
+            field.plain_ctrl.SetValue("edited-secret")
+            field.show_plain_text(False)
+            self.assertEqual(field.GetValue(), "edited-secret")
+            field.show_plain_text(True)
+            self.assertEqual(field.GetValue(), "edited-secret")
+        finally:
+            frame.Destroy()
+
+    def test_legacy_bark_defaults_are_warned_but_not_changed(self):
+        warnings = legacy_bark_warnings(
+            "chatgpt://codex",
+            (
+                "https://raw.githubusercontent.com/Finb/Bark/master/"
+                "Bark/Assets.xcassets/AppIcon.appiconset/bark.png"
+            ),
+        )
+
+        self.assertIn("跳转", warnings)
+        self.assertIn("图标", warnings)
+
     def test_load_settings_values_reads_all_fields(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "config.json"

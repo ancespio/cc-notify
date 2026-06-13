@@ -11,12 +11,14 @@ class PackagingTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('#define AppVersion "1.0.0"', script)
+        self.assertIn('#define AppVersion "1.0.1"', script)
+        self.assertIn("Agent-Notify-Setup-v1.0.1", script)
         self.assertIn("SetupIconFile=..\\build\\agent-notify.ico", script)
         self.assertIn("[Icons]", script)
         self.assertIn("Agent-Notify 设置", script)
         self.assertIn("[Run]", script)
         self.assertIn("postinstall", script)
+        self.assertIn("--onboarding", script)
         self.assertIn("--stop-tray --disable-autostart", script)
         self.assertNotIn("BarkPage", script)
         self.assertNotIn("--install-request", script)
@@ -42,7 +44,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("/notify bark on|ssh|off|status", readme)
         self.assertIn("/notify feishu on|ssh|off|status", readme)
         self.assertIn("lark-cli", readme)
-        self.assertIn("v1.0.0", readme)
+        self.assertIn("v1.0.1", readme)
+        self.assertIn("auth login --recommend", readme)
+        self.assertIn("自动获取", readme)
         self.assertNotIn("Global `AGENTS.md` fallback", readme)
 
     def test_pyinstaller_build_is_windowed_and_bundles_custom_icon(self):
@@ -58,7 +62,7 @@ class PackagingTests(unittest.TestCase):
 
         self.assertIn('"url": "chatgpt://"', config)
         self.assertIn(
-            "Agent-Notify/v1.0.0/assets/agent-notify.png", config
+            "Agent-Notify/v1.0.1/assets/agent-notify.png", config
         )
         self.assertNotIn("Finb/Bark", config)
         self.assertIn('"agents"', config)

@@ -25,6 +25,13 @@ class NotifyCommand:
     action: str
 
 
+@dataclass(frozen=True)
+class LarkAuthStatus:
+    authenticated: bool
+    executable: str
+    detail: str
+
+
 def parse_notify_command(text: str) -> NotifyCommand | None:
     parts = text.strip().lower().split()
     if not parts or parts[0] != "/notify":
@@ -89,12 +96,18 @@ def execute_notify_command(config_path: Path, text: str) -> str:
 
 
 class LarkCliClient:
-    def __init__(self, executable: str, timeout: float = 10):
+    def __init__(
+        self,
+        executable: str,
+        timeout: float = 10,
+        runner=subprocess.run,
+    ):
         self.executable = executable or "lark-cli"
         self.timeout = timeout
+        self.runner = runner
 
     def _run(self, *args: str, timeout: float | None = None) -> dict:
-        result = subprocess.run(
+        result = self.runner(
             [self.executable, *args],
             capture_output=True,
             text=True,
@@ -108,6 +121,88 @@ class LarkCliClient:
         if not result.stdout.strip():
             return {}
         return json.loads(result.stdout)
+
+    def auth_status(self) -> LarkAuthStatus:
+        try:
+            result = self.runner(
+                [self.executable, "auth", "status"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=self.timeout,
+                creationflags=CREATE_NO_WINDOW,
+            )
+        except Exception as exc:
+            return LarkAuthStatus(False, self.executable, str(exc))
+        detail = (
+            result.stdout.strip()
+            if result.returncode == 0
+            else result.stderr.strip() or result.stdout.strip()
+        )
+        return LarkAuthStatus(
+            result.returncode == 0,
+            self.executable,
+            detail,
+        )
+
+    @staticmethod
+    def _find_open_id(value: Any) -> str:
+        if isinstance(value, dict):
+            candidate = value.get("open_id")
+            if candidate:
+                return str(candidate)
+            for nested in value.values():
+                found = LarkCliClient._find_open_id(nested)
+                if found:
+                    return found
+        elif isinstance(value, list):
+            for nested in value:
+                found = LarkCliClient._find_open_id(nested)
+                if found:
+                    return found
+        return ""
+
+    def current_open_id(self) -> str:
+        response = self._run(
+            "api",
+            "GET",
+            "/open-apis/authen/v1/user_info",
+            "--as",
+            "user",
+            "--format",
+            "json",
+        )
+        open_id = self._find_open_id(response)
+        if not open_id:
+            raise OSError("飞书当前用户信息未返回 open_id。")
+        return open_id
+
+    def setup_command(self, step: str) -> list[str]:
+        executable = self.executable.replace("'", "''")
+        commands = {
+            "install": "npx @larksuite/cli@latest install",
+            "config": f"& '{executable}' config init",
+            "login": f"& '{executable}' auth login --recommend",
+        }
+        if step not in commands:
+            raise ValueError(f"未知的 lark-cli 配置步骤：{step}")
+        command = commands[step]
+        script = (
+            f"{command}; $exitCode = $LASTEXITCODE; "
+            "Write-Host ''; "
+            "Write-Host '完成后按 Enter 返回 Agent-Notify。'; "
+            "Read-Host | Out-Null; exit $exitCode"
+        )
+        return [
+            "powershell.exe",
+            "-NoLogo",
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            script,
+        ]
 
     def connect(self, open_id: str) -> str:
         content = json.dumps(

@@ -21,7 +21,9 @@ from .installer import (
     remove_claude_hooks,
     remove_codex_hooks,
 )
+from .icon_validation import validate_icon_url
 from .providers import BarkProvider
+from .resources import resource_path
 
 
 def app_data_dir(environ: Optional[Mapping[str, str]] = None) -> Path:
@@ -221,7 +223,23 @@ def remove_hooks(home: Path) -> list[Path]:
 
 def send_test_notification(config_path: Path) -> bool:
     config = load_config(config_path)
-    provider = BarkProvider(config["providers"]["bark"])
+    bark = config["providers"]["bark"]
+    icon_url = str(bark.get("icon") or "").strip()
+    expected_sha256 = None
+    if icon_url == DEFAULT_AGENT_ICON_URL:
+        icon_path = resource_path("assets/agent-notify.png")
+        if icon_path.is_file():
+            import hashlib
+
+            expected_sha256 = hashlib.sha256(
+                icon_path.read_bytes()
+            ).hexdigest()
+    if icon_url:
+        validate_icon_url(
+            icon_url,
+            expected_sha256=expected_sha256,
+        )
+    provider = BarkProvider(bark)
     return provider.send(
         NormalizedEvent(
             source="codex",

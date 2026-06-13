@@ -2,6 +2,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from agent_notify.desktop import (
     apply_install_request,
@@ -10,6 +11,7 @@ from agent_notify.desktop import (
     connect_feishu,
     save_bark_settings,
     save_provider_settings,
+    send_test_notification,
     sync_hooks,
     user_home,
 )
@@ -17,6 +19,29 @@ from agent_notify.config import DEFAULT_AGENT_ICON_URL
 
 
 class DesktopServiceTests(unittest.TestCase):
+    @patch("agent_notify.desktop.BarkProvider")
+    @patch("agent_notify.desktop.validate_icon_url")
+    def test_bark_test_validates_icon_before_sending(
+        self, validate_icon, provider_class
+    ):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            save_bark_settings(
+                path,
+                "device-key",
+                "https://api.day.app",
+                icon="https://example.com/icon.png",
+            )
+            provider_class.return_value.send.return_value = True
+
+            self.assertTrue(send_test_notification(path))
+
+        validate_icon.assert_called_once_with(
+            "https://example.com/icon.png",
+            expected_sha256=None,
+        )
+        provider_class.return_value.send.assert_called_once()
+
     def test_app_data_dir_uses_roaming_appdata(self):
         path = app_data_dir({"APPDATA": "C:/Users/Test/AppData/Roaming"})
 
