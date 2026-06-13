@@ -84,19 +84,16 @@ chatgpt://
 
 ## Bark 图标
 
-Windows EXE、托盘、安装器和卸载项统一使用 Bark 官方应用图标：
+Windows EXE、托盘、安装器、卸载项和 Bark 通知统一使用 Agent-Notify 自有图标：
 
 ```text
-https://raw.githubusercontent.com/Finb/Bark/master/Bark/Assets.xcassets/AppIcon.appiconset/bark.png
+https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.0/assets/agent-notify.png
 ```
 
-构建时将该 PNG 固化为项目资源，并生成 Windows ICO。运行时不依赖网络加载
-Windows 图标。
+图标采用浅色底、深色通知铃、白色终端符号和珊瑚色提醒点，不使用亮绿色强调。
+构建时将 PNG 固化为项目资源，并生成 Windows ICO。运行时不依赖网络加载。
 
-Bark 推送的默认 `icon` 使用上述公网 PNG 地址。Bark 会在 iPhone 端缓存相同
-图标 URL。用户可在设置窗口覆盖该地址。
-
-Bark 项目采用 MIT 许可证。项目中保留 Bark LICENSE 副本和图标来源说明。
+Bark 推送的默认 `icon` 使用上述公网 PNG 地址。用户可在设置窗口覆盖该地址。
 
 ## 配置兼容
 
@@ -113,7 +110,7 @@ Bark 项目采用 MIT 许可证。项目中保留 Bark LICENSE 副本和图标�
   "providers": {
     "bark": {
       "url": "chatgpt://",
-      "icon": "https://raw.githubusercontent.com/Finb/Bark/master/Bark/Assets.xcassets/AppIcon.appiconset/bark.png"
+      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.0/assets/agent-notify.png"
     }
   },
   "agents": {

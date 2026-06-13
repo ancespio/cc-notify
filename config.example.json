@@ -1,4 +1,34 @@
 {
-  "open_id": "ou_REDACTED",
-  "chat_id": ""
+  "providers": {
+    "bark": {
+      "enabled": true,
+      "mode": "all",
+      "server": "https://api.day.app",
+      "device_key": "YOUR_BARK_DEVICE_KEY",
+      "group": "Agent-Notify",
+      "sound": "",
+      "level": "active",
+      "url": "chatgpt://",
+      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.0/assets/agent-notify.png",
+      "timeout": 8
+    },
+    "feishu": {
+      "enabled": false,
+      "control_enabled": false,
+      "mode": "all",
+      "open_id": "",
+      "chat_id": "",
+      "lark_cli": "",
+      "timeout": 10
+    }
+  },
+  "agents": {
+    "codex": true,
+    "claude": true
+  },
+  "events": {
+    "permission": true,
+    "question": true,
+    "stop": true
+  }
 }

@@ -9,7 +9,6 @@
 
 - Bark 通知默认跳转到 `https://chatgpt.com/codex`。
 - Windows 安装器显示“点击通知跳转”字段，并预填默认地址。
-- 桌面配置程序提供相同字段。
 - 非空的自定义地址保存到 `config.json` 的
   `providers.bark.url`。
 - 字段留空时恢复默认 Codex 地址。
@@ -28,7 +27,7 @@ Codex App 打开，但没有保证 iOS 上的 ChatGPT 会处理它。HTTPS Codex
 ## 兼容性
 
 已有配置中明确设置的 Bark URL 保持不变。已有配置缺少 URL 或 URL 为空时，
-在重新保存设置或再次安装后写入默认 Codex 地址。
+在再次安装后写入默认 Codex 地址。
 
 通知仍采用 fail-open。用户填写的自定义地址无效时，不阻塞 Codex 或
 Claude Code 的 Hook 执行。

@@ -54,8 +54,8 @@ python -m unittest tests.test_runtime tests.test_desktop tests.test_providers -v
 ```python
 DEFAULT_BARK_URL = "chatgpt://"
 DEFAULT_BARK_ICON_URL = (
-    "https://raw.githubusercontent.com/Finb/Bark/master/"
-    "Bark/Assets.xcassets/AppIcon.appiconset/bark.png"
+    "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
+    "v1.0.0/assets/agent-notify.png"
 )
 ```
 
@@ -115,45 +115,43 @@ Claude Code 复选框，以及“保存并应用”“发送测试通知”“�
 
 运行步骤 2 的命令，预期全部通过。
 
-### 任务 3：Bark 官方图标与许可
+### 任务 3：Agent-Notify 自有图标
 
 **文件：**
-- 新建：`assets/bark.png`
-- 新建：`assets/BARK-LICENSE.txt`
-- 新建：`assets/BARK-ICON-SOURCE.md`
+- 新建：`assets/agent-notify.svg`
+- 新建：`assets/agent-notify.png`
 - 修改：`build_windows.py`
 - 修改：`agent_notify/tray_app.py`
 - 修改：`tests/test_build_windows.py`
 - 修改：`tests/test_packaging.py`
 
-- [ ] **步骤 1：下载官方 Bark 图标**
+- [x] **步骤 1：生成自有图标**
 
-从 Bark 官方仓库下载：
+使用确定性 SVG 与 Pillow 脚本生成浅色底、深色通知铃、白色终端符号和珊瑚色
+提醒点，不使用亮绿色强调。
 
 ```text
-https://raw.githubusercontent.com/Finb/Bark/master/Bark/Assets.xcassets/AppIcon.appiconset/bark.png
+https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.0/assets/agent-notify.png
 ```
 
-保存到 `assets/bark.png`，并保存 Bark MIT LICENSE 与来源说明。
-
-- [ ] **步骤 2：编写资源失败测试**
+- [x] **步骤 2：编写资源测试**
 
 断言图标存在、可由 Pillow 打开、尺寸非零，构建脚本从该 PNG 生成 ICO，
-托盘从相同 PNG 创建图像，而不是绘制旧的自定义图标。
+托盘从相同 PNG 创建图像。
 
-- [ ] **步骤 3：运行测试并确认失败**
+- [x] **步骤 3：运行测试**
 
 ```powershell
 python -m unittest tests.test_build_windows tests.test_packaging tests.test_tray_app -v
 ```
 
-- [ ] **步骤 4：实现统一图标**
+- [x] **步骤 4：实现统一图标**
 
-`build_windows.py` 将 `assets/bark.png` 转为多尺寸 ICO，并以
-`--add-data` 打包 PNG。托盘通过运行时资源路径加载 Bark PNG，并在通知关闭时
+`build_windows.py` 将 `assets/agent-notify.png` 转为多尺寸 ICO，并以
+`--add-data` 打包 PNG。托盘通过运行时资源路径加载自有 PNG，并在通知关闭时
 转为灰度显示。
 
-- [ ] **步骤 5：运行相关测试并确认通过**
+- [x] **步骤 5：运行相关测试并确认通过**
 
 运行步骤 3 的命令，预期全部通过。
 

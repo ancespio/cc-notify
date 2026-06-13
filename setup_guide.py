@@ -1,117 +1,124 @@
 #!/usr/bin/env python
-"""CC-Notify 一键安装 — 给 AI Agent 执行的完整部署脚本.
-Usage:
-    python setup_guide.py --dry-run    # 仅打印步骤，不修改文件
-    python setup_guide.py              # 执行安装
-"""
-import json
-import os
-import subprocess
+"""Install Agent-Notify hooks for Codex and Claude Code."""
+
+import argparse
+from pathlib import Path
 import sys
 
-DRY_RUN = "--dry-run" in sys.argv
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-LARK = os.path.join(os.environ.get("APPDATA", ""), "npm", "lark-cli.cmd")
-SETTINGS = os.path.join(os.environ.get("USERPROFILE", ""), ".claude", "settings.json")
+from agent_notify.config import VALID_MODES, load_config, update_config
+from agent_notify.installer import (
+    install_claude_hooks,
+    install_codex_hooks,
+    remove_agent_instructions,
+)
 
 
-def run(cmd, **kw):
-    if DRY_RUN:
-        print(f"  [dry-run] {' '.join(cmd) if isinstance(cmd, list) else cmd}")
-        return True, ""
-    try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=30,
-                           encoding="utf-8", errors="replace")
-        return r.returncode == 0, r.stdout.strip()
-    except Exception as e:
-        return False, str(e)
+SCRIPT_DIR = Path(__file__).resolve().parent
 
 
-def step(msg):
-    print(f"\n{'[DRY-RUN] ' if DRY_RUN else ''}{msg}")
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Install Agent-Notify for Codex and Claude Code."
+    )
+    parser.add_argument("--home", type=Path, default=Path.home())
+    parser.add_argument(
+        "--config", type=Path, default=SCRIPT_DIR / "config.json"
+    )
+    parser.add_argument("--bark-key", default="")
+    parser.add_argument("--bark-server", default="")
+    parser.add_argument("--bark-mode", choices=VALID_MODES, default="")
+    parser.add_argument("--enable-feishu", action="store_true")
+    parser.add_argument("--enable-feishu-control", action="store_true")
+    parser.add_argument("--feishu-mode", choices=VALID_MODES, default="")
+    parser.add_argument("--open-id", default="")
+    parser.add_argument("--chat-id", default="")
+    parser.add_argument("--lark-cli", default="")
+    parser.add_argument("--python-executable", default=sys.executable)
+    parser.add_argument("--skip-codex", action="store_true")
+    parser.add_argument("--skip-claude", action="store_true")
+    parser.add_argument("--dry-run", action="store_true")
+    return parser.parse_args()
 
 
-def main():
-    errors = []
+def write_config(path: Path, args: argparse.Namespace) -> None:
+    def mutate(config: dict) -> dict:
+        bark = config["providers"]["bark"]
+        if args.bark_key:
+            bark["device_key"] = args.bark_key
+            bark["enabled"] = True
+        if args.bark_server:
+            bark["server"] = args.bark_server
+        if args.bark_mode:
+            bark["mode"] = args.bark_mode
 
-    # 1. Check lark-cli
-    step("1/5 检查 lark-cli...")
-    ok, out = run([LARK, "auth", "status"])
-    if not ok:
-        errors.append("lark-cli 未安装或未登录。请先: npm install -g @larksuite/cli && lark-cli auth login")
-    else:
-        print(f"  lark-cli OK")
+        feishu = config["providers"]["feishu"]
+        if args.enable_feishu or args.open_id:
+            feishu["enabled"] = True
+        if args.enable_feishu_control:
+            feishu["control_enabled"] = True
+        if args.feishu_mode:
+            feishu["mode"] = args.feishu_mode
+        if args.open_id:
+            feishu["open_id"] = args.open_id
+        if args.chat_id:
+            feishu["chat_id"] = args.chat_id
+        if args.lark_cli:
+            feishu["lark_cli"] = args.lark_cli
+        return config
 
-    # 2. Check Python deps
-    step("2/5 检查 Python 依赖...")
-    ok, _ = run([sys.executable, "-c", "import pystray; import PIL"])
-    if not ok:
-        run([sys.executable, "-m", "pip", "install", "pystray", "Pillow"])
-    print(f"  pystray, Pillow OK")
+    update_config(path, mutate)
 
-    # 3. Get open_id
-    step("3/5 获取 Feishu open_id...")
-    ok, out = run([LARK, "api", "GET", "/open-apis/authen/v1/user_info", "--params", "{}"])
-    open_id = ""
-    if ok:
-        try:
-            open_id = json.loads(out)["data"]["open_id"]
-            print(f"  open_id: {open_id}")
-        except (json.JSONDecodeError, KeyError):
-            errors.append("无法解析 open_id")
-    else:
-        errors.append("无法获取 open_id，请确认 lark-cli 已登录")
 
-    # 4. Write config.json
-    step("4/5 写入 config.json...")
-    config_file = os.path.join(SCRIPT_DIR, "config.json")
-    if not DRY_RUN:
-        with open(config_file, "w", encoding="utf-8") as f:
-            json.dump({"open_id": open_id, "chat_id": ""}, f, ensure_ascii=False)
-        print(f"  已写入: {config_file}")
+def main() -> int:
+    args = parse_args()
+    script_path = SCRIPT_DIR / "notify_hook.py"
+    codex_dir = args.home / ".codex"
+    actions = []
 
-    # 5. Update Claude Code hooks
-    step("5/5 配置 Claude Code hooks...")
-    hook_cmd = f"python \"{os.path.join(SCRIPT_DIR, 'notify_hook.py')}\""
-    hook_entry = {
-        "type": "command",
-        "command": hook_cmd,
-    }
-    hook_block = {
-        "matcher": "*",
-        "hooks": [hook_entry],
-    }
+    if not args.skip_codex:
+        actions.append(("Codex hooks", codex_dir / "hooks.json"))
+        if (codex_dir / "AGENTS.md").exists():
+            actions.append(
+                (
+                    "Clean legacy Agent-Notify instructions",
+                    codex_dir / "AGENTS.md",
+                )
+            )
+    if not args.skip_claude:
+        actions.append(
+            ("Claude Code hooks", args.home / ".claude" / "settings.json")
+        )
+    actions.append(("Agent-Notify config", args.config))
 
-    try:
-        if os.path.exists(SETTINGS):
-            with open(SETTINGS, "r", encoding="utf-8") as f:
-                settings = json.load(f)
-        else:
-            settings = {}
+    if args.dry_run:
+        print("Agent-Notify dry run:")
+        for label, path in actions:
+            print(f"- {label}: {path}")
+        return 0
 
-        if "hooks" not in settings:
-            settings["hooks"] = {}
-        settings["hooks"]["PermissionRequest"] = [hook_block]
-        settings["hooks"]["Elicitation"] = [hook_block]
+    if not args.skip_codex:
+        install_codex_hooks(
+            codex_dir / "hooks.json",
+            script_path,
+            args.python_executable,
+        )
+        agents_path = codex_dir / "AGENTS.md"
+        if agents_path.exists():
+            remove_agent_instructions(agents_path)
+    if not args.skip_claude:
+        install_claude_hooks(
+            args.home / ".claude" / "settings.json",
+            script_path,
+            args.python_executable,
+        )
+    write_config(args.config, args)
 
-        if not DRY_RUN:
-            with open(SETTINGS, "w", encoding="utf-8") as f:
-                json.dump(settings, f, indent=2, ensure_ascii=False)
-            print(f"  已更新: {SETTINGS}")
-    except Exception as e:
-        errors.append(f"Hook 配置失败: {e}")
-
-    # Summary
-    print("\n" + "=" * 50)
-    if errors:
-        print("安装完成，但有以下问题：")
-        for e in errors:
-            print(f"  ❌ {e}")
-    else:
-        print("全部完成！重启 Claude Code 后生效。")
-        print("启动托盘: pythonw " + os.path.join(SCRIPT_DIR, "tray.py"))
-    print("=" * 50)
+    print("Agent-Notify installation complete.")
+    print("Restart Codex and Claude Code to load the new hooks.")
+    if not load_config(args.config)["providers"]["bark"]["device_key"]:
+        print("Bark device key is empty; add it to config.json or rerun with --bark-key.")
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    raise SystemExit(main())

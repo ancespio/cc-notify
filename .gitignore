@@ -6,3 +6,9 @@ hook_debug.log
 pending/
 hook_debug.log
 start_tray.vbs
+build/
+dist/
+dist-debug/
+dist-installer/
+tools/
+work/

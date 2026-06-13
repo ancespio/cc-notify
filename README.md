@@ -1,180 +1,241 @@
-# CC-Notify on Lark CLI
+# Agent-Notify
 
-> **Claude Code + 飞书 CLI** — 通过 `permissions.ask: ["Bash"]` 强制每次 Bash 弹窗，配合 PermissionRequest + Elicitation + Stop Hook，将所有用户需介入的场景（权限审批、提问、任务完成）实时推送到飞书，支持远程开关。
+Agent-Notify v1.0.0 将 Codex 和 Claude Code 的权限申请、结构化提问与任务
+完成事件推送到 Bark 或飞书，并可通过飞书远程切换两种渠道的通知模式。
 
-> **Claude Code + Feishu CLI** — Uses `permissions.ask: ["Bash"]` to force Bash permission dialogs, with PermissionRequest + Elicitation + Stop hooks pushing all user-intervention events to Feishu. Remote toggle supported.
+它不依赖 Codex App 自身的远程通知，因此通知是否送达不受线程新旧或桌面端当前
+是否打开该对话影响。
 
-## Abstract / 摘要
+## Windows 安装
 
-Controlling Claude Code on mobile devices typically requires a public IP and monitoring scripts. Tools like cc-connect bridge agents into IM platforms such as Feishu and WeChat, enabling control without a public IP. However, these tools rely on file-based session creation and cannot unify conversation history, making session management chaotic—they function best as pure IM-side bots. The official Claude app supports true mobile continuation but is exclusive to Pro subscribers. For relay work across locations, the most reliable approach remains NAT traversal (Tailscale) + SSH (Termius), which provides multi-device sync, command history, and AI-assisted input. Yet in non-office settings, attention is easily diverted—missed permission requests, elicitations, and task completions stall progress. Termius offers no native notification mechanism. This project proposes a new collaboration paradigm: combining IM tools with Claude Code's Hook interface to deliver stable notifications under complex network conditions. The tool is reliable in Claude Code + Feishu environments and supports remote on/off control via Feishu messages. Ablation experiments suggest compatibility potential with other agent tools and messaging platforms.
+1. 下载并双击 `Agent-Notify-Setup-v1.0.0.exe`。
+2. 选择安装目录，默认是 `C:\Program Files\Agent-Notify`。
+3. 安装完成后打开设置窗口。
+4. 在 Bark、飞书、Agent 与程序三个标签页中配置所需功能。
+5. 保存并应用，随后重启所选 Agent。
 
-> 想在移动设备上控制 Claude Code 往往需要公网 IP。cc-connect 等工具通过 IM 将 Agent 接入飞书/微信，但基于文件的会话机制导致记录无法统一、管理混乱，仅适合纯 IM 端机器人。官方 Claude App 支持移动端接力但仅限 Pro 订阅。目前最可靠的接力方案仍是 Tailscale 内网穿透 + Termius SSH——多端同步、指令保存、AI 智能撰写。但在非办公场景下注意力容易被转移，导致错过权限申请、提问或任务完成通知。Termius 无原生提醒接口。本工作将 IM 工具与 Claude Code Hook 结合，在复杂网络环境下实现稳定通知播报，支持飞书端远程开关，消融实验表明对多 Agent 和多消息平台具有兼容潜力。
+Bark 与飞书都不是必选项，可以仅启用其中一个、同时启用、全部关闭，或只启用
+飞书远程控制。
 
-## How It Works / 工作原理
+首次配置 Bark：
 
-```
-Claude Code (local/SSH) → Hook fires (PermissionRequest/Elicitation)
-    → notify_hook.py → lark-cli → Feishu Bot → 你的手机
-                                                      ↑
-tray.py (Windows 托盘) ← lark-cli polling ← /notify on|off 指令
-```
+1. 在 iPhone 安装 Bark，并复制设备 Key。
+2. 在 Bark 标签页启用通知并填写 Key。
+3. 选择全部通知、仅 SSH 或关闭。
+4. 点击“发送 Bark 测试通知”。
 
-The hook script (`notify_hook.py`) and tray app (`tray.py`) are **independent**. Notifications work without the tray; the tray is only needed for remote `/notify` commands.
+首次配置飞书：
 
-Hook 脚本和托盘应用**独立运行**——通知由 Hook 触发，不需要托盘；托盘仅用于接收飞书 `/notify` 远程指令。
+1. 安装并登录 `lark-cli`。
+2. 在飞书标签页填写 `lark-cli` 路径与当前用户的 `open_id`。
+3. 按需启用飞书通知、飞书远程控制或两者。
+4. 点击“连接并发送测试消息”，程序会保存返回的 `chat_id`。
 
-## One-Liner Setup / 一键安装
+安装过程本身不要求填写通知凭据。设置窗口是唯一的配置入口：
 
-Copy this to your AI agent (Claude Code, Cursor, etc.):
+- 开始菜单中的“Agent-Notify 设置”
+- 托盘菜单中的“打开设置”
+- 双击安装目录中的 `Agent-Notify.exe`
 
-> 帮我在 Windows 上部署 CC-Notify：1) 确认已安装 `lark-cli`（`npm install -g @larksuite/cli`）并已登录；2) `git clone https://github.com/ancespio/cc-notify.git`；3) `cd cc-notify && pip install pystray Pillow`；4) 运行 `python -c "import subprocess,json,os; lark=os.path.join(os.environ['APPDATA'],'npm','lark-cli.cmd'); r=subprocess.run([lark,'api','GET','/open-apis/authen/v1/user_info'],capture_output=True,text=True,encoding='utf-8'); print(json.loads(r.stdout)['data']['open_id'])"` 获取 open_id，写入 `config.json`（格式 `{"open_id":"ou_xxx","chat_id":""}`）；5) 在 `~/.claude/settings.json` 中添加 `permissions.ask: ["Bash"]` 和 `PermissionRequest`、`Elicitation`、`Stop` 三个 Hook，command 指向 `notify_hook.py` 的绝对路径。
+安装器会安全合并而不是覆盖：
 
-## Prerequisites / 前提
+- `~/.codex/hooks.json`
+- `~/.claude/settings.json`
 
-- **Claude Code** (Windows) with hooks enabled
-- **[lark-cli](https://github.com/larksuite/cli)** (`npm install -g @larksuite/cli`) — 已认证的飞书 CLI
-- **Feishu app with bot** — lark-cli 关联的飞书应用需有 `im:message:p2p_msg:readonly` 和 `im:message:send_as_bot` 权限
-- Python 3.7+ with `pystray` and `Pillow` (for tray app / 托盘可选)
+修改已有文件前，Agent-Notify 会在同一目录创建带时间戳的备份。卸载时只移除
+Agent-Notify 添加的 Hook，并保留通知配置。
 
-## Quick Start / 快速开始
+Agent-Notify 不会写入 `AGENTS.md`。从早期版本升级时，只会清理带有
+Agent-Notify 标记的旧提问兜底区块，其他用户指令保持不变。
 
-```bash
-git clone https://github.com/ancespio/cc-notify.git
-cd cc-notify
-pip install pystray Pillow
+## 安装内容
 
-# Get your Feishu open_id / 获取飞书 open_id
-python -c "
-import subprocess,json,os
-lark=os.path.join(os.environ['APPDATA'],'npm','lark-cli.cmd')
-r=subprocess.run([lark,'api','GET','/open-apis/authen/v1/user_info'],capture_output=True,text=True,encoding='utf-8')
-print(json.loads(r.stdout)['data']['open_id'])
-"
+程序文件安装到用户在安装器中选择的目录：
 
-# Create config / 创建配置
-echo '{"open_id":"ou_YOUR_ID","chat_id":""}' > config.json
-
-# Test / 测试
-echo '{"hook_event_name":"PermissionRequest","tool_name":"Bash","tool_input":{"command":"echo test"},"cwd":"."}' | python notify_hook.py
-
-# Start tray (optional / 可选)
-# Method 1: Direct launch / 直接启动
-pythonw tray.py
-
-# Method 2: Copy VBS template, adjust paths, double-click to run
-# 复制 VBS 模板，调整路径，双击运行
-copy start_tray.vbs.example start_tray.vbs
+```text
+C:\Program Files\Agent-Notify
 ```
 
-## Hook Setup / Hook 配置
+默认目录内包含：
 
-Add to / 添加到 `~/.claude/settings.json`:
+```text
+Agent-Notify/
+|-- Agent-Notify.exe
+|-- README.txt
+|-- LICENSE.txt
+|-- install-home.txt
+`-- unins000.exe
+```
+
+用户配置单独存放在：
+
+```text
+%APPDATA%\Agent-Notify\config.json
+```
+
+Bark Key 通过 HTTPS 请求体发送，不会放入请求 URL，也不会写入 Hook 输出。
+飞书功能通过本机已登录的 `lark-cli` 工作，Agent-Notify 不保存飞书密码。
+
+## Windows 托盘
+
+Agent-Notify 以轻量通知区域进程运行。托盘菜单可以：
+
+- 分别切换 Bark 与飞书的全部通知、仅 SSH、关闭模式。
+- 发送 Bark 测试通知。
+- 打开设置界面。
+- 开启或关闭登录自启动。
+- 退出当前托盘进程。
+
+Hook 通知不依赖托盘进程。托盘只负责状态与设置入口；Hook 触发时，Codex 和
+Claude Code 会短暂启动同一个可执行文件发送通知。
+
+## 飞书远程控制
+
+飞书通知与飞书远程控制是两个独立开关。即使飞书通知模式设为关闭，远程控制
+仍会继续轮询，因此可以从飞书恢复通知。
+
+```text
+/notify on|ssh|off
+/notify status
+/notify bark on|ssh|off|status
+/notify feishu on|ssh|off|status
+```
+
+不带渠道的旧命令同时设置 Bark 与飞书模式，但不会自动启用已关闭的渠道。
+`/notify status` 会回复两个渠道的启用状态、模式和远程控制状态。
+
+控制器只接受配置的 `open_id` 在已发现私聊中的命令。启动时只记录已有消息，
+不会重放历史 `/notify` 命令；重复消息也只处理一次。
+
+## 支持的事件
+
+| Agent | 权限申请 | 结构化提问 | 本轮完成 |
+| --- | --- | --- | --- |
+| Codex | 原生 `PermissionRequest` | 原生 `PreToolUse(request_user_input)` | 原生 `Stop` |
+| Claude Code | 原生 `PermissionRequest` | `AskUserQuestion` 的 `PreToolUse` 与 MCP `Elicitation` | 原生 `Stop` |
+
+Codex 将结构化提问暴露为内置 `request_user_input` 工具。Agent-Notify 通过
+`PreToolUse` 匹配该工具，因此提问通知不依赖模型指令，也不需要修改
+`AGENTS.md`。
+
+## 点击通知跳转
+
+Bark 通知默认携带：
+
+```text
+chatgpt://
+```
+
+点击通知后会直接请求打开 iOS ChatGPT App，不再默认跳转网页。跳转地址可在
+设置界面或安装器中修改，留空时会恢复 `chatgpt://`。
+
+本版本不生成具体线程的 `codex://threads/<session UUID>` 深链。OpenAI 已记录
+该协议可由 Codex App 打开，但尚未明确保证 ChatGPT iOS 可以处理它，因此默认
+只使用 ChatGPT App 的 `chatgpt://` 入口。
+
+## 配置
+
+核心配置示例：
 
 ```json
 {
-  "permissions": {
-    "ask": ["Bash"]
+  "providers": {
+    "bark": {
+      "enabled": true,
+      "mode": "all",
+      "server": "https://api.day.app",
+      "device_key": "YOUR_BARK_DEVICE_KEY",
+      "group": "Agent-Notify",
+      "url": "chatgpt://",
+      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.0/assets/agent-notify.png",
+      "timeout": 8
+    },
+    "feishu": {
+      "enabled": false,
+      "control_enabled": false,
+      "mode": "all",
+      "open_id": "",
+      "chat_id": "",
+      "lark_cli": "",
+      "timeout": 10
+    }
   },
-  "hooks": {
-    "PermissionRequest": [
-      {
-        "matcher": "*",
-        "hooks": [{
-          "type": "command",
-          "command": "python \"C:/absolute/path/to/cc-notify/notify_hook.py\""
-        }]
-      }
-    ],
-    "Elicitation": [
-      {
-        "matcher": "*",
-        "hooks": [{
-          "type": "command",
-          "command": "python \"C:/absolute/path/to/cc-notify/notify_hook.py\""
-        }]
-      }
-    ],
-    "Stop": [
-      {
-        "matcher": "*",
-        "hooks": [{
-          "type": "command",
-          "command": "python \"C:/absolute/path/to/cc-notify/notify_hook.py\""
-        }]
-      }
-    ]
+  "agents": {
+    "codex": true,
+    "claude": true
+  },
+  "events": {
+    "permission": true,
+    "question": true,
+    "stop": true
   }
 }
 ```
 
-> `permissions.ask: ["Bash"]` 是关键配置——强制每次 Bash 命令弹出权限确认，确保 PermissionRequest Hook 无条件触发。不加则 Bash 有 allow 规则时会跳过 Hook。
+`mode` 可取 `all`、`ssh-only`、`off`。设置窗口支持自建 Bark 服务和自定义
+通知图标 URL。
 
-> `permissions.ask: ["Bash"]` is required — it forces a permission dialog for every Bash call, ensuring PermissionRequest fires unconditionally. Without it, auto-allowed Bash commands bypass the hook.
+Windows 程序、托盘、安装器和 Bark 通知默认使用 Agent-Notify 自有图标：
+浅色底、深色通知铃、白色终端符号与珊瑚色提醒点。
 
-> 命令中的 CMD 特殊字符（`|` `&` `;` `<` `>`）会被自动裁剪为 `...`，避免破坏飞书消息传输。通知只做提醒，实际审批仍在终端进行。
+## 升级迁移
 
-> CMD special characters (`|` `&` `;` `<` `>`) in commands are auto-truncated to avoid breaking Feishu message delivery.
+- 沿用 `%APPDATA%\Agent-Notify\config.json`，保留已有 Bark Key 和 Hook 选择。
+- 旧版顶层 `open_id`、`chat_id` 会迁移到飞书 provider。
+- 旧 `mode.json` 会在首次运行时迁移为 Bark 与飞书各自的模式。
+- 迁移后所有运行状态均写入 `config.json`。
+- Agent-Notify 不会新增 `AGENTS.md` 内容，只清理旧版标记区块。
 
-**Important**: Hook + permission changes take effect after restarting Claude Code / 修改后需重启 Claude Code。
+## Codex 测试
 
-## Configuration / 配置
+在 Codex 的 Plan 模式中新建线程，并粘贴 `CODEX_TEST_PROMPT.md` 中的提示词。
+预期依次收到：
 
-### config.json (gitignored)
+1. `Codex 需要授权`
+2. `Codex 正在提问`
+3. `Codex 本轮完成`
 
-```json
-{
-  "open_id": "ou_xxxxxxxxxx",
-  "chat_id": ""
-}
+## 从源码构建
+
+要求：
+
+- Windows 10 或更高版本
+- Python 3.10+
+- PyInstaller
+- Pillow
+- pystray
+- wxPython
+- Inno Setup 6
+
+构建命令：
+
+```powershell
+python -m unittest discover -s tests -v
+python build_windows.py
+iscc installer\Agent-Notify.iss
 ```
 
-- `open_id` — Your Feishu user ID (see Quick Start for auto-detection)
-- `chat_id` — Auto-discovered on first tray run, leave empty
+最终安装包生成在：
 
-### mode.json (gitignored)
-
-| Mode | Behavior |
-|------|----------|
-| `all` | Always notify / 始终通知 |
-| `ssh-only` | Only when `SSH_TTY` or `SSH_CONNECTION` is set / 仅 SSH 会话 |
-| `off` | No notifications / 关闭 |
-
-## Remote Commands / 远程指令
-
-Send in Feishu bot chat (requires tray running) / 需托盘运行：
-
-| Command | Effect |
-|---------|--------|
-| `/notify on` | All on / 全部开启 |
-| `/notify ssh` | SSH-only / 仅 SSH |
-| `/notify off` | Disable / 关闭 |
-| `/notify status` | Current mode / 查看状态 |
-
-## Files / 文件说明
-
-```
-cc-notify/
-├── notify_hook.py          # Hook script (required / 必需)
-├── tray.py                 # Tray app (optional, for remote commands)
-├── setup_guide.py          # Auto-install script / 自动安装脚本
-├── config.example.json     # Config template / 配置模板
-├── start_tray.vbs.example  # VBS template / VBS 模板 (copy to start_tray.vbs)
-├── config.json             # (gitignored — your credentials)
-├── mode.json               # (gitignored — runtime state)
-└── start_tray.vbs          # (gitignored — your local launcher)
+```text
+dist-installer\Agent-Notify-Setup-v1.0.0.exe
 ```
 
-Runtime directories (`pending/`, `__pycache__/`) are created on demand and gitignored.
+## 常见问题
 
-## Troubleshooting / 常见问题
+- 没有 Bark 通知：检查 Bark 是否启用、Key 是否正确，以及模式是否为关闭。
+- 没有飞书通知：确认 `lark-cli` 已登录、`open_id` 正确并完成连接测试。
+- 飞书命令无响应：确认远程控制开关已开启，且消息来自配置的用户私聊。
+- 修改 Hook 后无效果：重启 Codex 或 Claude Code；Codex 还需在 `/hooks`
+  中信任 Agent-Notify Hook。
+- 托盘没有出现：双击 `Agent-Notify.exe` 保存设置，或重新登录 Windows。
 
-| Symptom / 症状 | Cause / 原因 | Fix / 解决 |
-|---------------|-------------|-----------|
-| No notification / 无通知 | Hook not loaded | Restart Claude Code / 重启 Claude Code |
-| Tray icon missing / 无托盘图标 | `pythonw` not found | Use `python tray.py` for debug / 调试模式启动 |
-| Garbled Chinese / 中文乱码 | GBK encoding in subprocess | Already fixed in v1.0+ |
-| lark-cli not found / lark-cli 找不到 | PATH issue | Uses `%APPDATA%\npm\lark-cli.cmd` by default |
+## 远程批准限制
 
-## License / 许可
+Bark 不提供自定义“允许”和“拒绝”通知按钮，因此 Agent-Notify v1.0.0 只负责通知，
+批准操作仍需在 Codex 或 Claude Code 中完成。Apple Watch 是否镜像 Bark
+通知取决于 iPhone 与 Apple Watch 的通知设置。
 
-MIT
+## 许可证
+
+Agent-Notify 使用 MIT License，详见 `LICENSE`。
