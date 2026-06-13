@@ -53,9 +53,31 @@ class NotifyCommandTests(unittest.TestCase):
             config = load_config(path)
 
         self.assertIn("Bark", reply)
-        self.assertFalse(config["providers"]["bark"]["enabled"])
+        self.assertTrue(config["providers"]["bark"]["enabled"])
         self.assertEqual(config["providers"]["bark"]["mode"], "all")
+        self.assertTrue(config["providers"]["feishu"]["enabled"])
         self.assertEqual(config["providers"]["feishu"]["mode"], "all")
+
+    def test_ssh_enables_and_off_disables_selected_channel(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            update_config(
+                path,
+                lambda config: config["providers"]["feishu"].update(
+                    {"control_enabled": True}
+                ),
+            )
+
+            execute_notify_command(path, "/notify feishu ssh")
+            enabled = load_config(path)["providers"]["feishu"]
+            execute_notify_command(path, "/notify feishu off")
+            disabled = load_config(path)["providers"]["feishu"]
+
+        self.assertTrue(enabled["enabled"])
+        self.assertEqual(enabled["mode"], "ssh-only")
+        self.assertFalse(disabled["enabled"])
+        self.assertEqual(disabled["mode"], "off")
+        self.assertTrue(disabled["control_enabled"])
 
     def test_status_reports_both_channels_and_control(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -72,6 +94,16 @@ class NotifyCommandTests(unittest.TestCase):
         self.assertIn("Bark", reply)
         self.assertIn("飞书", reply)
         self.assertIn("远程控制：开启", reply)
+
+    def test_global_status_always_reports_all_sections(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+
+            reply = execute_notify_command(path, "/notify status")
+
+        self.assertIn("Bark", reply)
+        self.assertIn("飞书", reply)
+        self.assertIn("远程控制", reply)
 
 
 class LarkCliClientTests(unittest.TestCase):
@@ -108,6 +140,33 @@ class LarkCliClientTests(unittest.TestCase):
         self.assertEqual(install[0].lower(), "powershell.exe")
         self.assertIn("npx @larksuite/cli@latest install", install[-1])
         self.assertIn("auth login --recommend", login[-1])
+
+    def test_reply_uses_json_content_for_multiline_text(self):
+        runner = MagicMock()
+        runner.return_value.returncode = 0
+        runner.return_value.stdout = "{}"
+        runner.return_value.stderr = ""
+        client = LarkCliClient("lark-cli", runner=runner)
+
+        client.reply("om_message", "line one\nline two")
+
+        command = runner.call_args.args[0]
+        self.assertIn("--content", command)
+        self.assertNotIn("--text", command)
+        content = command[command.index("--content") + 1]
+        self.assertEqual(
+            json.loads(content)["text"], "line one\nline two"
+        )
+
+    def test_version_status_and_update_command(self):
+        runner = MagicMock()
+        runner.return_value.returncode = 0
+        runner.return_value.stdout = "lark-cli version 1.0.25"
+        runner.return_value.stderr = ""
+        client = LarkCliClient("lark-cli", runner=runner)
+
+        self.assertEqual(client.version(), "1.0.25")
+        self.assertIn("update", client.setup_command("update")[-1])
 
 
 class FeishuControllerTests(unittest.TestCase):

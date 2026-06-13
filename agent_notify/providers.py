@@ -13,6 +13,10 @@ from .events import NormalizedEvent
 CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
 
 
+class BarkServiceError(OSError):
+    """Bark accepted the HTTP request but rejected the push."""
+
+
 def format_notification(event: NormalizedEvent) -> tuple[str, str]:
     agent = "Codex" if event.source == "codex" else "Claude Code"
     labels = {
@@ -70,7 +74,14 @@ class BarkProvider:
             data = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             return True
-        return data.get("code", 200) == 200
+        if data.get("code", 200) != 200:
+            message = str(
+                data.get("message")
+                or data.get("error")
+                or f"Bark service returned code {data.get('code')}"
+            )
+            raise BarkServiceError(message)
+        return True
 
 
 class FeishuProvider:

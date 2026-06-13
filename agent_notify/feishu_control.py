@@ -3,6 +3,7 @@
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import re
 import subprocess
 import sys
 import threading
@@ -17,6 +18,7 @@ MODE_LABELS = {
     "ssh-only": "仅 SSH",
     "off": "关闭",
 }
+RECOMMENDED_LARK_CLI_VERSION = "1.0.53"
 
 
 @dataclass(frozen=True)
@@ -73,11 +75,15 @@ def execute_notify_command(config_path: Path, text: str) -> str:
             "/notify bark|feishu on|ssh|off|status"
         )
     if command.action != "status":
+        enabled = command.action != "off"
         update_config(
             config_path,
             lambda config: [
                 config["providers"][name].update(
-                    {"mode": command.action}
+                    {
+                        "enabled": enabled,
+                        "mode": command.action,
+                    }
                 )
                 for name in command.targets
             ],
@@ -184,6 +190,7 @@ class LarkCliClient:
             "install": "npx @larksuite/cli@latest install",
             "config": f"& '{executable}' config init",
             "login": f"& '{executable}' auth login --recommend",
+            "update": f"& '{executable}' update",
         }
         if step not in commands:
             raise ValueError(f"未知的 lark-cli 配置步骤：{step}")
@@ -203,6 +210,23 @@ class LarkCliClient:
             "-Command",
             script,
         ]
+
+    def version(self) -> str:
+        result = self.runner(
+            [self.executable, "--version"],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=self.timeout,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if result.returncode != 0:
+            raise OSError(result.stderr.strip() or "lark-cli version failed")
+        match = re.search(r"(\d+\.\d+\.\d+)", result.stdout)
+        if not match:
+            raise OSError("无法识别 lark-cli 版本。")
+        return match.group(1)
 
     def connect(self, open_id: str) -> str:
         content = json.dumps(
@@ -245,6 +269,7 @@ class LarkCliClient:
         return list(response.get("data", {}).get("items", []))
 
     def reply(self, message_id: str, text: str) -> None:
+        content = json.dumps({"text": text}, ensure_ascii=False)
         self._run(
             "im",
             "+messages-reply",
@@ -252,8 +277,8 @@ class LarkCliClient:
             "bot",
             "--message-id",
             message_id,
-            "--text",
-            text,
+            "--content",
+            content,
             "--msg-type",
             "text",
         )

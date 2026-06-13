@@ -8,13 +8,14 @@ import subprocess
 import sys
 import threading
 import time
-from typing import Any
+from typing import Any, Mapping
 
 from PIL import Image, ImageEnhance
 import pystray
 
 from .config import load_config, update_config
 from .desktop import send_test_notification
+from .diagnostics import write_diagnostic
 from .feishu_control import FeishuController, LarkCliClient
 from .resources import resource_path
 
@@ -72,6 +73,35 @@ def autostart_command(executable: Path) -> str:
 
 def settings_command(executable: Path) -> list[str]:
     return [str(executable)]
+
+
+def self_launch_environment(
+    environ: Mapping[str, str] | None = None,
+    *,
+    frozen: bool | None = None,
+) -> dict[str, str]:
+    environment = dict(environ or os.environ)
+    is_frozen = (
+        bool(getattr(sys, "frozen", False))
+        if frozen is None
+        else frozen
+    )
+    if is_frozen:
+        environment["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+    return environment
+
+
+def launch_self(
+    executable: Path,
+    *arguments: str,
+    launcher=subprocess.Popen,
+    frozen: bool | None = None,
+):
+    return launcher(
+        [str(executable), *arguments],
+        close_fds=True,
+        env=self_launch_environment(frozen=frozen),
+    )
 
 
 def set_autostart(
@@ -162,17 +192,27 @@ def restart_tray(
     launcher=subprocess.Popen,
     sleeper=time.sleep,
     tray_running=None,
+    frozen: bool | None = None,
 ) -> None:
     if stop_signal is None:
         stop_signal = signal_tray_stop
     if tray_running is None:
         tray_running = _tray_instance_running
     stop_signal()
+    stopped = False
     for _ in range(50):
         if not tray_running():
+            stopped = True
             break
         sleeper(0.1)
-    launcher([str(executable), "--tray"], close_fds=True)
+    if not stopped:
+        raise TimeoutError("旧托盘未能在限定时间内退出。")
+    launch_self(
+        executable,
+        "--tray",
+        launcher=launcher,
+        frozen=frozen,
+    )
 
 
 def _make_icon(enabled: bool) -> Image.Image:
@@ -313,15 +353,28 @@ def run_tray(
     ) -> None:
         def worker() -> None:
             ok = False
+            error = ""
             try:
                 ok = send_test_notification(config_path)
-            except Exception:
-                pass
+            except Exception as exc:
+                error = str(exc)
+                config = load_config(config_path)
+                bark = config["providers"]["bark"]
+                feishu = config["providers"]["feishu"]
+                write_diagnostic(
+                    config_path.parent / "agent-notify.log",
+                    f"Bark test failed: {error}",
+                    secrets=(
+                        bark.get("device_key", ""),
+                        feishu.get("open_id", ""),
+                        feishu.get("chat_id", ""),
+                    ),
+                )
             _notify(
                 icon,
                 "Bark 测试通知已发送。"
                 if ok
-                else "Bark 测试通知发送失败。",
+                else f"Bark 测试失败：{error[:80]}",
             )
 
         threading.Thread(target=worker, daemon=True).start()
@@ -341,12 +394,13 @@ def run_tray(
         icon: pystray.Icon, _item: pystray.MenuItem
     ) -> None:
         try:
-            subprocess.Popen(
-                settings_command(executable),
-                close_fds=True,
+            launch_self(executable)
+        except OSError as exc:
+            write_diagnostic(
+                config_path.parent / "agent-notify.log",
+                f"Open settings failed: {exc}",
             )
-        except OSError:
-            _notify(icon, "无法打开 Agent-Notify 设置。")
+            _notify(icon, f"无法打开设置：{exc}")
 
     def exit_tray(
         icon: pystray.Icon, _item: pystray.MenuItem

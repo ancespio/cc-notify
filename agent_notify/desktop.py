@@ -26,6 +26,12 @@ from .providers import BarkProvider
 from .resources import resource_path
 
 
+class BarkTestError(RuntimeError):
+    def __init__(self, stage: str, message: str):
+        super().__init__(message)
+        self.stage = stage
+
+
 def app_data_dir(environ: Optional[Mapping[str, str]] = None) -> Path:
     values = environ or os.environ
     base = values.get("APPDATA")
@@ -224,6 +230,16 @@ def remove_hooks(home: Path) -> list[Path]:
 def send_test_notification(config_path: Path) -> bool:
     config = load_config(config_path)
     bark = config["providers"]["bark"]
+    if not bark.get("enabled"):
+        raise BarkTestError("configuration", "Bark 通知尚未启用。")
+    if not str(bark.get("device_key") or "").strip():
+        raise BarkTestError(
+            "configuration", "请先配置有效的 Bark Key。"
+        )
+    if not str(bark.get("server") or "").strip():
+        raise BarkTestError(
+            "configuration", "请先配置 Bark 服务器地址。"
+        )
     icon_url = str(bark.get("icon") or "").strip()
     expected_sha256 = None
     if icon_url == DEFAULT_AGENT_ICON_URL:
@@ -235,19 +251,34 @@ def send_test_notification(config_path: Path) -> bool:
                 icon_path.read_bytes()
             ).hexdigest()
     if icon_url:
-        validate_icon_url(
-            icon_url,
-            expected_sha256=expected_sha256,
-        )
+        try:
+            validate_icon_url(
+                icon_url,
+                expected_sha256=expected_sha256,
+            )
+        except Exception as exc:
+            raise BarkTestError(
+                "icon", f"通知图标校验失败：{exc}"
+            ) from exc
     provider = BarkProvider(bark)
-    return provider.send(
-        NormalizedEvent(
-            source="codex",
-            kind="stop",
-            workspace="Agent-Notify",
-            summary="Bark notification test succeeded.",
+    try:
+        sent = provider.send(
+            NormalizedEvent(
+                source="codex",
+                kind="stop",
+                workspace="Agent-Notify",
+                summary="Bark 测试通知发送成功。",
+            )
         )
-    )
+    except Exception as exc:
+        raise BarkTestError(
+            "push", f"Bark 推送请求失败：{exc}"
+        ) from exc
+    if not sent:
+        raise BarkTestError(
+            "push", "Bark 服务未返回成功状态，请检查 Key 和服务器。"
+        )
+    return True
 
 
 def apply_install_request(

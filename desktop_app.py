@@ -24,7 +24,11 @@ from agent_notify.desktop import (
     sync_hooks,
     user_home,
 )
-from agent_notify.feishu_control import LarkCliClient
+from agent_notify.feishu_control import (
+    LarkCliClient,
+    RECOMMENDED_LARK_CLI_VERSION,
+)
+from agent_notify.diagnostics import write_diagnostic
 from agent_notify.icon_validation import (
     IconValidationError,
     validate_icon_url,
@@ -32,6 +36,7 @@ from agent_notify.icon_validation import (
 from agent_notify.resources import resource_path
 from agent_notify.tray_app import (
     is_autostart_enabled,
+    launch_self,
     restart_tray,
     set_autostart,
 )
@@ -47,8 +52,8 @@ LEGACY_BARK_ICON_PARTS = (
 
 def legacy_bark_warnings(url: str, icon: str) -> str:
     warnings = []
-    if url.strip().casefold() == "chatgpt://codex":
-        warnings.append("点击跳转仍使用旧版 chatgpt://codex。")
+    if url.strip().casefold() == "chatgpt://":
+        warnings.append("点击跳转仍使用旧版 chatgpt://。")
     if any(part.casefold() in icon.casefold() for part in LEGACY_BARK_ICON_PARTS):
         warnings.append("通知图标仍使用旧版 Bark 官方图标。")
     return " ".join(warnings)
@@ -65,6 +70,14 @@ def expected_icon_sha256(url: str) -> str | None:
     if url.strip() != DEFAULT_BARK_ICON_URL:
         return None
     return local_icon_sha256()
+
+
+def settings_secrets(values: "SettingsValues") -> tuple[str, ...]:
+    return (
+        values.device_key,
+        values.open_id,
+        values.chat_id,
+    )
 
 
 class SecretField(wx.Panel):
@@ -405,6 +418,12 @@ class SettingsFrame(wx.Frame):
         detect_button = wx.Button(feishu_panel, label="4. 重新检测")
         detect_button.Bind(wx.EVT_BUTTON, self._on_lark_detect)
         setup_actions.Add(detect_button, 0, wx.RIGHT, 8)
+        update_button = wx.Button(feishu_panel, label="更新 CLI")
+        update_button.Bind(
+            wx.EVT_BUTTON,
+            lambda _event: self._run_lark_setup("update"),
+        )
+        setup_actions.Add(update_button, 0, wx.RIGHT, 8)
         fetch_open_id = wx.Button(
             feishu_panel, label="自动获取 open_id"
         )
@@ -633,14 +652,25 @@ class SettingsFrame(wx.Frame):
         )
 
     def _on_save(self, _event: wx.CommandEvent) -> None:
+        values = self._values()
         try:
-            changed = self._save()
+            changed = apply_settings(
+                values,
+                self.config_path,
+                self.home,
+                self.executable,
+            )
             set_autostart(
                 self.autostart_check.IsChecked(),
                 self.executable,
             )
             restart_tray(self.executable)
         except Exception as exc:
+            write_diagnostic(
+                self.config_path.parent / "agent-notify.log",
+                f"Save settings or restart tray failed: {exc}",
+                secrets=settings_secrets(values),
+            )
             self.status.SetLabel(f"保存失败：{exc}")
             wx.MessageBox(str(exc), APP_NAME, wx.OK | wx.ICON_ERROR)
             return
@@ -733,12 +763,35 @@ class SettingsFrame(wx.Frame):
 
     def _lark_status_finished(self, status) -> None:
         if status.authenticated:
-            self.lark_status.SetLabel(
-                f"已登录：{status.executable}"
-            )
+            self.lark_status.SetLabel(f"已登录：{status.executable}")
+            self._refresh_lark_version()
         else:
             detail = status.detail or "未安装、未初始化或尚未登录。"
             self.lark_status.SetLabel(f"未就绪：{detail}")
+
+    def _refresh_lark_version(self) -> None:
+        executable = self.lark_cli_ctrl.GetValue().strip()
+
+        def worker() -> None:
+            try:
+                version = LarkCliClient(executable).version()
+                current = tuple(int(part) for part in version.split("."))
+                recommended = tuple(
+                    int(part)
+                    for part in RECOMMENDED_LARK_CLI_VERSION.split(".")
+                )
+                if current < recommended:
+                    message = (
+                        f"已登录，lark-cli {version}；"
+                        f"建议更新到 {RECOMMENDED_LARK_CLI_VERSION} 或更高版本。"
+                    )
+                else:
+                    message = f"已登录，lark-cli {version}。"
+            except Exception as exc:
+                message = f"已登录；版本检测失败：{exc}"
+            wx.CallAfter(self.lark_status.SetLabel, message)
+
+        threading.Thread(target=worker, daemon=True).start()
 
     def _on_fetch_open_id(self, _event: wx.CommandEvent) -> None:
         executable = self.lark_cli_ctrl.GetValue().strip()
@@ -775,8 +828,12 @@ class SettingsFrame(wx.Frame):
         self, _event: wx.CommandEvent
     ) -> None:
         try:
-            subprocess.Popen([str(self.executable), "--onboarding"])
+            launch_self(self.executable, "--onboarding")
         except Exception as exc:
+            write_diagnostic(
+                self.config_path.parent / "agent-notify.log",
+                f"Open onboarding failed: {exc}",
+            )
             wx.MessageBox(str(exc), APP_NAME, wx.OK | wx.ICON_ERROR)
 
     def _feishu_connected(self, chat_id: str, error: str) -> None:
@@ -1007,6 +1064,7 @@ class OnboardingFrame(wx.Frame):
             ("1. 安装", "install"),
             ("2. 初始化", "config"),
             ("3. 登录", "login"),
+            ("更新 CLI", "update"),
         ):
             button = wx.Button(page, label=label)
             button.Bind(
@@ -1082,8 +1140,8 @@ class OnboardingFrame(wx.Frame):
         if self.page_index < 4:
             self._show_page(self.page_index + 1)
             return
+        values = self._values()
         try:
-            values = self._values()
             changed = apply_settings(
                 values,
                 self.config_path,
@@ -1096,6 +1154,11 @@ class OnboardingFrame(wx.Frame):
             )
             restart_tray(self.executable)
         except Exception as exc:
+            write_diagnostic(
+                self.config_path.parent / "agent-notify.log",
+                f"Onboarding save or restart tray failed: {exc}",
+                secrets=settings_secrets(values),
+            )
             self.status.SetLabel(f"保存失败：{exc}")
             wx.MessageBox(str(exc), APP_NAME, wx.OK | wx.ICON_ERROR)
             return

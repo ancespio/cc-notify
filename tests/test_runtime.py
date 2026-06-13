@@ -6,7 +6,9 @@ import unittest
 from pathlib import Path
 
 from agent_notify.config import (
+    CONFIG_VERSION,
     DEFAULT_AGENT_ICON_URL,
+    DEFAULT_BARK_URL,
     load_config,
     update_config,
 )
@@ -25,7 +27,7 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["providers"]["bark"]["device_key"], "")
         self.assertEqual(
             config["providers"]["bark"]["url"],
-            "chatgpt://",
+            "chatgpt://codex",
         )
         self.assertEqual(
             config["providers"]["bark"]["icon"],
@@ -39,6 +41,7 @@ class ConfigTests(unittest.TestCase):
             config["providers"]["feishu"]["control_enabled"]
         )
         self.assertEqual(config["providers"]["feishu"]["mode"], "all")
+        self.assertEqual(config["config_version"], CONFIG_VERSION)
 
     def test_empty_legacy_url_and_icon_use_new_defaults(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -60,8 +63,70 @@ class ConfigTests(unittest.TestCase):
             config = load_config(path)
 
         bark = config["providers"]["bark"]
-        self.assertEqual(bark["url"], "chatgpt://")
+        self.assertEqual(bark["url"], DEFAULT_BARK_URL)
         self.assertEqual(bark["icon"], DEFAULT_AGENT_ICON_URL)
+
+    def test_old_defaults_are_backed_up_and_migrated_once(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            old = {
+                "providers": {
+                    "bark": {
+                        "device_key": "keep-secret",
+                        "url": "chatgpt://",
+                        "icon": (
+                            "https://raw.githubusercontent.com/ancespio/"
+                            "Agent-Notify/v1.0.1/assets/agent-notify.png"
+                        ),
+                    }
+                }
+            }
+            path.write_text(json.dumps(old), encoding="utf-8")
+
+            first = load_config(path)
+            backups = list(
+                path.parent.glob("config.json.agent-notify-backup-*")
+            )
+            second = load_config(path)
+
+        self.assertEqual(first["config_version"], CONFIG_VERSION)
+        self.assertEqual(
+            first["providers"]["bark"]["url"], "chatgpt://codex"
+        )
+        self.assertIn(
+            "v1.0.2/assets/agent-notify.png",
+            first["providers"]["bark"]["icon"],
+        )
+        self.assertEqual(
+            first["providers"]["bark"]["device_key"], "keep-secret"
+        )
+        self.assertEqual(len(backups), 1)
+        self.assertEqual(first, second)
+
+    def test_migration_preserves_custom_bark_destinations(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "bark": {
+                                "url": "myapp://thread/123",
+                                "icon": "https://example.com/custom.png",
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+        bark = config["providers"]["bark"]
+        self.assertEqual(bark["url"], "myapp://thread/123")
+        self.assertEqual(
+            bark["icon"], "https://example.com/custom.png"
+        )
 
     def test_legacy_feishu_config_is_migrated_in_memory(self):
         with tempfile.TemporaryDirectory() as temp_dir:

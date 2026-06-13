@@ -1,5 +1,5 @@
 #define AppName "Agent-Notify"
-#define AppVersion "1.0.1"
+#define AppVersion "1.0.2"
 #define Publisher "ancespio"
 
 [Setup]
@@ -11,7 +11,7 @@ DefaultDirName={autopf}\Agent-Notify
 DefaultGroupName=Agent-Notify
 DisableProgramGroupPage=yes
 OutputDir=..\dist-installer
-OutputBaseFilename=Agent-Notify-Setup-v1.0.1
+OutputBaseFilename=Agent-Notify-Setup-v1.0.2
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -40,6 +40,9 @@ Filename: "{app}\Agent-Notify.exe"; Parameters: "--onboarding"; Description: "�
 Filename: "{app}\Agent-Notify.exe"; Parameters: "--stop-tray --disable-autostart --remove-hooks --silent --home ""{code:GetConfiguredHome}"""; Flags: runhidden waituntilterminated; RunOnceId: "RemoveAgentNotify"
 
 [Code]
+var
+  DeleteUserData: Boolean;
+
 function GetConfiguredHome(Param: String): String;
 var
   HomeValue: AnsiString;
@@ -69,6 +72,7 @@ begin
       ewWaitUntilTerminated,
       ResultCode
     );
+    Sleep(2000);
 end;
 
 procedure CurStepChanged(CurStep: TSetupStep);
@@ -87,12 +91,37 @@ begin
   );
 end;
 
+procedure CurUninstallStepChanged(CurUninstallStep: TUninstallStep);
+begin
+  if CurUninstallStep = usUninstall then
+  begin
+    if UninstallSilent then
+      DeleteUserData := False
+    else
+      DeleteUserData :=
+        MsgBox(
+          '是否同时删除 Agent-Notify 的用户配置、日志和迁移备份？' +
+          Chr(13) + Chr(10) +
+          '选择“否”可在以后重新安装时继续使用当前配置。',
+          mbConfirmation,
+          MB_YESNO or MB_DEFBUTTON1
+        ) = IDYES;
+  end;
+  if (CurUninstallStep = usPostUninstall) and DeleteUserData then
+    DelTree(
+      ExpandConstant('{userappdata}\Agent-Notify'),
+      True,
+      True,
+      True
+    );
+end;
+
 procedure CurPageChanged(CurPageID: Integer);
 begin
   if CurPageID = wpFinished then
   begin
     WizardForm.FinishedLabel.Caption :=
-      'Agent-Notify v1.0.1 已安装。' + #13 + #10 +
+      'Agent-Notify v1.0.2 已安装。' + #13 + #10 +
       '点击“完成”后会打开首次配置向导，可按需跳过任意渠道。' + #13 + #10 +
       '以后可双击 Agent-Notify.exe 或使用开始菜单修改设置。';
   end;

@@ -4,7 +4,12 @@ from unittest.mock import patch
 
 from agent_notify.config import DEFAULT_BARK_ICON_URL
 from agent_notify.events import NormalizedEvent
-from agent_notify.providers import BarkProvider, FeishuProvider, dispatch
+from agent_notify.providers import (
+    BarkProvider,
+    BarkServiceError,
+    FeishuProvider,
+    dispatch,
+)
 
 
 def sample_event(kind="permission"):
@@ -56,6 +61,26 @@ class BarkProviderTests(unittest.TestCase):
     def test_bark_disabled_or_missing_key_is_skipped(self):
         self.assertFalse(BarkProvider({"enabled": False}).send(sample_event()))
         self.assertFalse(BarkProvider({"enabled": True}).send(sample_event()))
+
+    @patch("agent_notify.providers.urlopen")
+    def test_bark_error_response_preserves_service_message(self, urlopen):
+        response = FakeResponse()
+        response.read = lambda: json.dumps(
+            {"code": 400, "message": "invalid device key"}
+        ).encode("utf-8")
+        urlopen.return_value = response
+        provider = BarkProvider(
+            {
+                "enabled": True,
+                "server": "https://api.day.app",
+                "device_key": "secret-key",
+            }
+        )
+
+        with self.assertRaisesRegex(
+            BarkServiceError, "invalid device key"
+        ):
+            provider.send(sample_event())
 
 
 class FeishuProviderTests(unittest.TestCase):

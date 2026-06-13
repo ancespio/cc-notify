@@ -41,7 +41,7 @@ class DesktopAppServiceTests(unittest.TestCase):
 
     def test_legacy_bark_defaults_are_warned_but_not_changed(self):
         warnings = legacy_bark_warnings(
-            "chatgpt://codex",
+            "chatgpt://",
             (
                 "https://raw.githubusercontent.com/Finb/Bark/master/"
                 "Bark/Assets.xcassets/AppIcon.appiconset/bark.png"
@@ -50,6 +50,17 @@ class DesktopAppServiceTests(unittest.TestCase):
 
         self.assertIn("跳转", warnings)
         self.assertIn("图标", warnings)
+
+    def test_current_bark_defaults_are_not_warned(self):
+        warnings = legacy_bark_warnings(
+            "chatgpt://codex",
+            (
+                "https://raw.githubusercontent.com/ancespio/"
+                "Agent-Notify/v1.0.2/assets/agent-notify.png"
+            ),
+        )
+
+        self.assertEqual(warnings, "")
 
     def test_load_settings_values_reads_all_fields(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -90,7 +101,7 @@ class DesktopAppServiceTests(unittest.TestCase):
         self.assertTrue(values.bark_enabled)
         self.assertEqual(values.bark_mode, "ssh-only")
         self.assertEqual(values.server, "https://bark.example")
-        self.assertEqual(values.url, "chatgpt://")
+        self.assertEqual(values.url, "chatgpt://codex")
         self.assertEqual(values.icon, "https://example.com/bark.png")
         self.assertTrue(values.codex)
         self.assertFalse(values.claude)
@@ -134,7 +145,7 @@ class DesktopAppServiceTests(unittest.TestCase):
             saved = json.loads(config.read_text(encoding="utf-8"))
             bark = saved["providers"]["bark"]
             self.assertEqual(bark["device_key"], "new-key")
-            self.assertEqual(bark["url"], "chatgpt://")
+            self.assertEqual(bark["url"], "chatgpt://codex")
             self.assertEqual(bark["icon"], DEFAULT_BARK_ICON_URL)
             self.assertFalse(bark["enabled"])
             self.assertTrue(

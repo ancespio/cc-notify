@@ -1,4 +1,5 @@
 import json
+import os
 import tempfile
 import unittest
 from pathlib import Path
@@ -14,6 +15,7 @@ from agent_notify.tray_app import (
     set_provider_mode,
     settings_command,
     set_autostart,
+    self_launch_environment,
 )
 
 
@@ -64,6 +66,16 @@ class TrayAppTests(unittest.TestCase):
         )
 
         self.assertEqual(settings_command(executable), [str(executable)])
+
+    def test_frozen_self_launch_resets_pyinstaller_environment(self):
+        environment = self_launch_environment(
+            {"KEEP": "value"}, frozen=True
+        )
+
+        self.assertEqual(environment["KEEP"], "value")
+        self.assertEqual(
+            environment["PYINSTALLER_RESET_ENVIRONMENT"], "1"
+        )
 
     def test_is_autostart_enabled_requires_matching_command(self):
         registry = MagicMock()
@@ -129,13 +141,30 @@ class TrayAppTests(unittest.TestCase):
             launcher=launcher,
             sleeper=sleeper,
             tray_running=lambda: next(states),
+            frozen=True,
         )
 
         launcher.assert_called_once_with(
             [str(executable), "--tray"],
             close_fds=True,
+            env=self_launch_environment(os.environ, frozen=True),
         )
         self.assertEqual(sleeper.call_count, 2)
+
+    def test_restart_tray_does_not_launch_while_old_instance_remains(self):
+        launcher = MagicMock()
+
+        with self.assertRaisesRegex(TimeoutError, "托盘"):
+            restart_tray(
+                Path("C:/Agent-Notify.exe"),
+                stop_signal=lambda: True,
+                launcher=launcher,
+                sleeper=lambda _seconds: None,
+                tray_running=lambda: True,
+                frozen=True,
+            )
+
+        launcher.assert_not_called()
 
 
 if __name__ == "__main__":

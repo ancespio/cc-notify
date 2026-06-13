@@ -5,6 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 from agent_notify.desktop import (
+    BarkTestError,
     apply_install_request,
     app_data_dir,
     backup_file,
@@ -41,6 +42,44 @@ class DesktopServiceTests(unittest.TestCase):
             expected_sha256=None,
         )
         provider_class.return_value.send.assert_called_once()
+
+    def test_bark_test_reports_configuration_stage(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+
+            with self.assertRaises(BarkTestError) as caught:
+                send_test_notification(path)
+
+        self.assertEqual(caught.exception.stage, "configuration")
+        self.assertIn("Bark Key", str(caught.exception))
+
+    @patch("agent_notify.desktop.validate_icon_url")
+    def test_bark_test_reports_icon_stage(self, validate_icon):
+        validate_icon.side_effect = OSError("remote icon is unavailable")
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            save_bark_settings(path, "device-key", "https://api.day.app")
+
+            with self.assertRaises(BarkTestError) as caught:
+                send_test_notification(path)
+
+        self.assertEqual(caught.exception.stage, "icon")
+        self.assertNotIn("device-key", str(caught.exception))
+
+    @patch("agent_notify.desktop.BarkProvider")
+    @patch("agent_notify.desktop.validate_icon_url")
+    def test_bark_test_reports_push_stage(
+        self, _validate_icon, provider_class
+    ):
+        provider_class.return_value.send.return_value = False
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            save_bark_settings(path, "device-key", "https://api.day.app")
+
+            with self.assertRaises(BarkTestError) as caught:
+                send_test_notification(path)
+
+        self.assertEqual(caught.exception.stage, "push")
 
     def test_app_data_dir_uses_roaming_appdata(self):
         path = app_data_dir({"APPDATA": "C:/Users/Test/AppData/Roaming"})
@@ -102,7 +141,7 @@ class DesktopServiceTests(unittest.TestCase):
 
         self.assertEqual(
             config["providers"]["bark"]["url"],
-            "chatgpt://",
+            "chatgpt://codex",
         )
         self.assertEqual(
             config["providers"]["bark"]["icon"],
