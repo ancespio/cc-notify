@@ -129,6 +129,15 @@ class SetupCliTests(unittest.TestCase):
             self.assertEqual(
                 installed["providers"]["bark"]["device_key"], "test-key"
             )
+            self.assertEqual(
+                installed["providers"]["bark"]["mode"], "all"
+            )
+            self.assertNotIn(
+                "enabled", installed["providers"]["bark"]
+            )
+            self.assertNotIn(
+                "enabled", installed["providers"]["feishu"]
+            )
             agents_text = agents.read_text(encoding="utf-8")
             self.assertIn("Keep this.", agents_text)
             self.assertNotIn("agent-notify:question-hook", agents_text)
@@ -146,6 +155,8 @@ class DesktopHookCliTests(unittest.TestCase):
                 "--enable-autostart",
                 "--disable-autostart",
                 "--stop-tray",
+                "--settings-tab",
+                "feishu",
             ]
         )
 
@@ -157,6 +168,7 @@ class DesktopHookCliTests(unittest.TestCase):
         self.assertTrue(args.enable_autostart)
         self.assertTrue(args.disable_autostart)
         self.assertTrue(args.stop_tray)
+        self.assertEqual(args.settings_tab, "feishu")
 
     def test_no_arguments_open_settings(self):
         args = desktop_hook.parse_args([])
@@ -173,7 +185,20 @@ class DesktopHookCliTests(unittest.TestCase):
         result = desktop_hook.main(["--settings-smoke-test"])
 
         self.assertEqual(result, 0)
-        run_app_mock.assert_called_once_with(smoke_test=True)
+        run_app_mock.assert_called_once_with(
+            smoke_test=True, settings_tab=None
+        )
+
+    @patch("desktop_hook.run_settings_app", return_value=0)
+    def test_settings_tab_opens_requested_page(self, run_app_mock):
+        result = desktop_hook.main(["--settings-tab", "feishu"])
+
+        self.assertEqual(result, 0)
+        run_app_mock.assert_called_once_with(
+            smoke_test=False,
+            onboarding=False,
+            settings_tab="feishu",
+        )
 
     @patch("desktop_hook.run_settings_app", return_value=0)
     def test_onboarding_opens_wizard(self, run_app_mock):

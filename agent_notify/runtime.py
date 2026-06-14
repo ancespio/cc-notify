@@ -50,8 +50,6 @@ def handle_payload(
     active = []
     for name, provider in named_providers.items():
         settings = provider_config.get(name, {})
-        if not settings.get("enabled", False):
-            continue
         if should_notify_for_mode(settings.get("mode", "all"), environment):
             active.append(provider)
     return dispatch(event, active)

@@ -12,6 +12,7 @@ from agent_notify.desktop import (
     connect_feishu,
     save_bark_settings,
     save_provider_settings,
+    send_feishu_test_notification,
     send_test_notification,
     sync_hooks,
     user_home,
@@ -110,7 +111,6 @@ class DesktopServiceTests(unittest.TestCase):
             )
             config = json.loads(path.read_text(encoding="utf-8"))
 
-        self.assertTrue(config["providers"]["bark"]["enabled"])
         self.assertEqual(
             config["providers"]["bark"]["device_key"], "device-key"
         )
@@ -124,7 +124,9 @@ class DesktopServiceTests(unittest.TestCase):
         )
         self.assertTrue(config["agents"]["codex"])
         self.assertFalse(config["agents"]["claude"])
-        self.assertFalse(config["providers"]["feishu"]["enabled"])
+        self.assertNotIn("enabled", config["providers"]["bark"])
+        self.assertNotIn("enabled", config["providers"]["feishu"])
+        self.assertEqual(config["providers"]["feishu"]["mode"], "off")
 
     def test_save_bark_settings_restores_defaults_when_empty(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -215,7 +217,6 @@ class DesktopServiceTests(unittest.TestCase):
             save_provider_settings(
                 path,
                 bark={
-                    "enabled": False,
                     "device_key": "",
                     "server": "https://api.day.app",
                     "url": "chatgpt://",
@@ -223,9 +224,8 @@ class DesktopServiceTests(unittest.TestCase):
                     "mode": "off",
                 },
                 feishu={
-                    "enabled": False,
                     "control_enabled": True,
-                    "mode": "all",
+                    "mode": "off",
                     "open_id": "ou_owner",
                     "chat_id": "oc_private",
                     "lark_cli": "lark-cli",
@@ -234,14 +234,40 @@ class DesktopServiceTests(unittest.TestCase):
             )
             config = json.loads(path.read_text(encoding="utf-8"))
 
-        self.assertFalse(config["providers"]["bark"]["enabled"])
-        self.assertFalse(config["providers"]["feishu"]["enabled"])
+        self.assertNotIn("enabled", config["providers"]["bark"])
+        self.assertNotIn("enabled", config["providers"]["feishu"])
         self.assertTrue(
             config["providers"]["feishu"]["control_enabled"]
         )
         self.assertEqual(config["providers"]["feishu"]["open_id"], "ou_owner")
         self.assertTrue(config["agents"]["codex"])
         self.assertFalse(config["agents"]["claude"])
+
+    @patch("agent_notify.desktop.FeishuProvider")
+    def test_feishu_test_uses_real_notification_even_when_mode_is_off(
+        self, provider_class
+    ):
+        provider_class.return_value.send.return_value = True
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            save_provider_settings(
+                path,
+                bark={"mode": "off"},
+                feishu={
+                    "mode": "off",
+                    "control_enabled": False,
+                    "open_id": "ou_owner",
+                    "chat_id": "oc_private",
+                    "lark_cli": "lark-cli",
+                },
+                agents={"codex": True, "claude": True},
+            )
+
+            self.assertTrue(send_feishu_test_notification(path))
+
+        event = provider_class.return_value.send.call_args.args[0]
+        self.assertEqual(event.kind, "stop")
+        self.assertIn("飞书测试", event.summary)
 
     def test_connect_feishu_persists_discovered_chat_id(self):
         class Client:

@@ -122,15 +122,46 @@ class SecretField(wx.Panel):
         target.SetFocus()
 
 
+class ModeControl(wx.Panel):
+    MODES = (
+        ("all", "全部通知"),
+        ("ssh-only", "仅 SSH"),
+        ("off", "关闭"),
+    )
+
+    def __init__(self, parent: wx.Window, value: str):
+        super().__init__(parent)
+        sizer = wx.BoxSizer(wx.HORIZONTAL)
+        self.buttons: dict[str, wx.RadioButton] = {}
+        for index, (mode, label) in enumerate(self.MODES):
+            style = wx.RB_GROUP if index == 0 else 0
+            button = wx.RadioButton(
+                self,
+                label=label,
+                style=style,
+            )
+            self.buttons[mode] = button
+            sizer.Add(button, 0, wx.RIGHT, 18)
+        self.SetSizer(sizer)
+        self.SetValue(value)
+
+    def GetValue(self) -> str:
+        for mode, button in self.buttons.items():
+            if button.GetValue():
+                return mode
+        return "all"
+
+    def SetValue(self, value: str) -> None:
+        self.buttons.get(value, self.buttons["all"]).SetValue(True)
+
+
 @dataclass
 class SettingsValues:
-    bark_enabled: bool
     device_key: str
     server: str
     url: str
     icon: str
     bark_mode: str
-    feishu_enabled: bool
     feishu_control_enabled: bool
     feishu_mode: str
     open_id: str
@@ -146,17 +177,15 @@ def load_settings_values(config_path: Path) -> SettingsValues:
     feishu = config["providers"]["feishu"]
     agents = config["agents"]
     return SettingsValues(
-        bark_enabled=bool(bark.get("enabled", True)),
         device_key=str(bark.get("device_key") or ""),
         server=str(bark.get("server") or DEFAULT_SERVER),
         url=str(bark.get("url") or DEFAULT_BARK_URL),
         icon=str(bark.get("icon") or DEFAULT_BARK_ICON_URL),
         bark_mode=str(bark.get("mode") or "all"),
-        feishu_enabled=bool(feishu.get("enabled", False)),
         feishu_control_enabled=bool(
             feishu.get("control_enabled", False)
         ),
-        feishu_mode=str(feishu.get("mode") or "all"),
+        feishu_mode=str(feishu.get("mode") or "off"),
         open_id=str(feishu.get("open_id") or ""),
         chat_id=str(feishu.get("chat_id") or ""),
         lark_cli=str(feishu.get("lark_cli") or default_lark_cli()),
@@ -178,13 +207,15 @@ def default_lark_cli() -> str:
 
 
 def validate_settings(values: SettingsValues) -> None:
-    if values.bark_enabled and not values.device_key.strip():
+    if values.bark_mode != "off" and not values.device_key.strip():
         raise ValueError("启用 Bark 通知时请填写 Bark Key。")
-    if values.feishu_enabled or values.feishu_control_enabled:
+    if values.feishu_mode != "off" or values.feishu_control_enabled:
         if not values.open_id.strip():
             raise ValueError("启用飞书功能时请填写 open_id。")
         if not values.lark_cli.strip():
             raise ValueError("启用飞书功能时请填写 lark-cli 路径。")
+    if values.feishu_control_enabled and not values.chat_id.strip():
+        raise ValueError("启用飞书遥控时请先连接并生成 chat_id。")
 
 
 def apply_settings(
@@ -197,7 +228,6 @@ def apply_settings(
     save_provider_settings(
         config_path,
         bark={
-            "enabled": values.bark_enabled,
             "device_key": values.device_key,
             "server": values.server,
             "url": values.url,
@@ -205,7 +235,6 @@ def apply_settings(
             "mode": values.bark_mode,
         },
         feishu={
-            "enabled": values.feishu_enabled,
             "control_enabled": values.feishu_control_enabled,
             "mode": values.feishu_mode,
             "open_id": values.open_id,
@@ -237,13 +266,15 @@ class SettingsFrame(wx.Frame):
         config_path: Path,
         home: Path,
         executable: Path,
+        settings_tab: str | None = None,
     ):
         super().__init__(
             None,
             title=f"{APP_NAME} 设置",
-            size=(760, 660),
-            style=wx.DEFAULT_FRAME_STYLE & ~wx.RESIZE_BORDER,
+            size=(820, 720),
+            style=wx.DEFAULT_FRAME_STYLE,
         )
+        self.SetMinSize((720, 560))
         self.config_path = config_path
         self.home = home
         self.executable = executable
@@ -273,21 +304,27 @@ class SettingsFrame(wx.Frame):
         outer.Add(subtitle, 0, wx.LEFT | wx.RIGHT | wx.TOP, 24)
 
         notebook = wx.Notebook(panel)
-        bark_panel = wx.Panel(notebook)
-        feishu_panel = wx.Panel(notebook)
-        agent_panel = wx.Panel(notebook)
+        bark_panel = wx.ScrolledWindow(notebook, style=wx.VSCROLL)
+        feishu_panel = wx.ScrolledWindow(notebook, style=wx.VSCROLL)
+        agent_panel = wx.ScrolledWindow(notebook, style=wx.VSCROLL)
+        for page in (bark_panel, feishu_panel, agent_panel):
+            page.SetScrollRate(0, 12)
         notebook.AddPage(bark_panel, "Bark")
         notebook.AddPage(feishu_panel, "飞书")
         notebook.AddPage(agent_panel, "Agent 与程序")
+        notebook.SetSelection(
+            {"bark": 0, "feishu": 1, "agent": 2}.get(
+                settings_tab or "bark", 0
+            )
+        )
         outer.Add(notebook, 1, wx.EXPAND | wx.ALL, 24)
 
         bark_sizer = wx.BoxSizer(wx.VERTICAL)
-        self.bark_enabled = wx.CheckBox(
-            bark_panel, label="启用 Bark 通知"
-        )
-        self.bark_enabled.SetValue(values.bark_enabled)
-        bark_sizer.Add(self.bark_enabled, 0, wx.ALL, 12)
         bark_form = self._form()
+        self.bark_mode = ModeControl(bark_panel, values.bark_mode)
+        self._add_row(
+            bark_form, bark_panel, "通知模式", self.bark_mode
+        )
         self.key_ctrl = SecretField(bark_panel, values.device_key)
         self.show_key = wx.CheckBox(bark_panel, label="显示")
         self.show_key.Bind(wx.EVT_CHECKBOX, self._toggle_key)
@@ -315,12 +352,6 @@ class SettingsFrame(wx.Frame):
         self._add_row(
             bark_form, bark_panel, "通知图标 URL", self.icon_ctrl
         )
-        self.bark_mode = self._mode_choice(
-            bark_panel, values.bark_mode
-        )
-        self._add_row(
-            bark_form, bark_panel, "通知模式", self.bark_mode
-        )
         bark_sizer.Add(bark_form, 0, wx.EXPAND | wx.ALL, 12)
         bark_tools = wx.BoxSizer(wx.HORIZONTAL)
         restore_defaults = wx.Button(
@@ -337,6 +368,14 @@ class SettingsFrame(wx.Frame):
         bark_tools.Add(restore_defaults, 0, wx.RIGHT, 8)
         bark_tools.Add(validate_icon, 0, wx.RIGHT, 12)
         bark_tools.Add(self.icon_preview, 0, wx.ALIGN_CENTER_VERTICAL)
+        bark_tools.AddStretchSpacer()
+        bark_test = wx.Button(
+            bark_panel, label="发送 Bark 测试通知"
+        )
+        bark_test.Bind(wx.EVT_BUTTON, self._on_bark_test)
+        bark_tools.Add(
+            bark_test, 0, wx.ALIGN_CENTER_VERTICAL | wx.LEFT, 12
+        )
         bark_sizer.Add(
             bark_tools, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12
         )
@@ -348,25 +387,22 @@ class SettingsFrame(wx.Frame):
             wx.LEFT | wx.RIGHT | wx.BOTTOM,
             12,
         )
-        bark_test = wx.Button(bark_panel, label="发送 Bark 测试通知")
-        bark_test.Bind(wx.EVT_BUTTON, self._on_bark_test)
-        bark_sizer.Add(bark_test, 0, wx.LEFT | wx.BOTTOM, 12)
         bark_panel.SetSizer(bark_sizer)
+        bark_panel.FitInside()
 
         feishu_sizer = wx.BoxSizer(wx.VERTICAL)
-        options = wx.BoxSizer(wx.HORIZONTAL)
-        self.feishu_enabled = wx.CheckBox(
-            feishu_panel, label="启用飞书通知"
-        )
-        self.feishu_enabled.SetValue(values.feishu_enabled)
         self.feishu_control = wx.CheckBox(
             feishu_panel, label="启用飞书远程控制"
         )
         self.feishu_control.SetValue(values.feishu_control_enabled)
-        options.Add(self.feishu_enabled, 0, wx.ALL, 12)
-        options.Add(self.feishu_control, 0, wx.ALL, 12)
-        feishu_sizer.Add(options, 0)
+        feishu_sizer.Add(self.feishu_control, 0, wx.ALL, 12)
         feishu_form = self._form()
+        self.feishu_mode = ModeControl(
+            feishu_panel, values.feishu_mode
+        )
+        self._add_row(
+            feishu_form, feishu_panel, "通知模式", self.feishu_mode
+        )
         self.lark_cli_ctrl = wx.TextCtrl(
             feishu_panel, value=values.lark_cli
         )
@@ -389,12 +425,6 @@ class SettingsFrame(wx.Frame):
         )
         self._add_row(
             feishu_form, feishu_panel, "chat_id", self.chat_id_ctrl
-        )
-        self.feishu_mode = self._mode_choice(
-            feishu_panel, values.feishu_mode
-        )
-        self._add_row(
-            feishu_form, feishu_panel, "通知模式", self.feishu_mode
         )
         feishu_sizer.Add(feishu_form, 0, wx.EXPAND | wx.ALL, 12)
         self.lark_status = wx.StaticText(
@@ -438,6 +468,7 @@ class SettingsFrame(wx.Frame):
         connect_button.Bind(wx.EVT_BUTTON, self._on_feishu_connect)
         feishu_sizer.Add(connect_button, 0, wx.LEFT | wx.BOTTOM, 12)
         feishu_panel.SetSizer(feishu_sizer)
+        feishu_panel.FitInside()
 
         agent_sizer = wx.BoxSizer(wx.VERTICAL)
         agent_box = wx.StaticBoxSizer(
@@ -490,6 +521,7 @@ class SettingsFrame(wx.Frame):
         )
         agent_sizer.Add(rerun_onboarding, 0, wx.LEFT | wx.BOTTOM, 12)
         agent_panel.SetSizer(agent_sizer)
+        agent_panel.FitInside()
 
         actions = wx.BoxSizer(wx.HORIZONTAL)
         save_button = wx.Button(panel, label="保存并应用")
@@ -526,19 +558,12 @@ class SettingsFrame(wx.Frame):
         return form
 
     @staticmethod
-    def _mode_choice(parent: wx.Window, value: str) -> wx.Choice:
-        choices = wx.Choice(
-            parent,
-            choices=["全部通知", "仅 SSH", "关闭"],
-        )
-        choices.SetSelection(
-            {"all": 0, "ssh-only": 1, "off": 2}.get(value, 0)
-        )
-        return choices
+    def _mode_choice(parent: wx.Window, value: str) -> ModeControl:
+        return ModeControl(parent, value)
 
     @staticmethod
-    def _mode_value(control: wx.Choice) -> str:
-        return ("all", "ssh-only", "off")[control.GetSelection()]
+    def _mode_value(control: ModeControl) -> str:
+        return control.GetValue()
 
     @staticmethod
     def _add_row(
@@ -627,13 +652,11 @@ class SettingsFrame(wx.Frame):
 
     def _values(self) -> SettingsValues:
         return SettingsValues(
-            bark_enabled=self.bark_enabled.IsChecked(),
             device_key=self.key_ctrl.GetValue(),
             server=self.server_ctrl.GetValue(),
             url=self.url_ctrl.GetValue(),
             icon=self.icon_ctrl.GetValue(),
             bark_mode=self._mode_value(self.bark_mode),
-            feishu_enabled=self.feishu_enabled.IsChecked(),
             feishu_control_enabled=self.feishu_control.IsChecked(),
             feishu_mode=self._mode_value(self.feishu_mode),
             open_id=self.open_id_ctrl.GetValue(),
@@ -968,16 +991,20 @@ class OnboardingFrame(wx.Frame):
         page, sizer = self._page(
             self.book,
             "1. 选择要配置的功能",
-            "Bark、飞书和 Agent Hook 都可以独立选择，也可以全部跳过。",
+            "Bark、飞书通知均使用三态模式；选择关闭即可跳过通知。",
         )
-        self.wizard_bark_enabled = wx.CheckBox(
-            page, label="配置并启用 Bark 通知"
+        self.wizard_bark_mode = ModeControl(
+            page, values.bark_mode
         )
-        self.wizard_bark_enabled.SetValue(values.bark_enabled)
-        self.wizard_feishu_enabled = wx.CheckBox(
-            page, label="配置并启用飞书通知"
+        self._row(
+            page, sizer, "Bark 通知", self.wizard_bark_mode
         )
-        self.wizard_feishu_enabled.SetValue(values.feishu_enabled)
+        self.wizard_feishu_mode = ModeControl(
+            page, values.feishu_mode
+        )
+        self._row(
+            page, sizer, "飞书通知", self.wizard_feishu_mode
+        )
         self.wizard_feishu_control = wx.CheckBox(
             page, label="启用飞书远程控制"
         )
@@ -993,8 +1020,6 @@ class OnboardingFrame(wx.Frame):
         )
         self.wizard_claude.SetValue(values.claude)
         for control in (
-            self.wizard_bark_enabled,
-            self.wizard_feishu_enabled,
             self.wizard_feishu_control,
             self.wizard_codex,
             self.wizard_claude,
@@ -1171,15 +1196,13 @@ class OnboardingFrame(wx.Frame):
 
     def _values(self) -> SettingsValues:
         return SettingsValues(
-            bark_enabled=self.wizard_bark_enabled.IsChecked(),
             device_key=self.wizard_key.GetValue(),
             server=self.wizard_server.GetValue(),
             url=self.wizard_url.GetValue(),
             icon=self.wizard_icon.GetValue(),
-            bark_mode="all",
-            feishu_enabled=self.wizard_feishu_enabled.IsChecked(),
+            bark_mode=self.wizard_bark_mode.GetValue(),
             feishu_control_enabled=self.wizard_feishu_control.IsChecked(),
-            feishu_mode="all",
+            feishu_mode=self.wizard_feishu_mode.GetValue(),
             open_id=self.wizard_open_id.GetValue(),
             chat_id=self.wizard_chat_id.GetValue(),
             lark_cli=self.wizard_lark_cli.GetValue(),
@@ -1189,10 +1212,12 @@ class OnboardingFrame(wx.Frame):
 
     def _update_summary(self) -> None:
         selected = []
-        if self.wizard_bark_enabled.IsChecked():
-            selected.append("Bark 通知")
-        if self.wizard_feishu_enabled.IsChecked():
-            selected.append("飞书通知")
+        selected.append(
+            f"Bark：{dict(ModeControl.MODES)[self.wizard_bark_mode.GetValue()]}"
+        )
+        selected.append(
+            f"飞书：{dict(ModeControl.MODES)[self.wizard_feishu_mode.GetValue()]}"
+        )
         if self.wizard_feishu_control.IsChecked():
             selected.append("飞书远程控制")
         if self.wizard_codex.IsChecked():
@@ -1242,7 +1267,6 @@ class OnboardingFrame(wx.Frame):
         save_provider_settings(
             self.config_path,
             bark={
-                "enabled": values.bark_enabled,
                 "device_key": values.device_key,
                 "server": values.server,
                 "url": values.url,
@@ -1250,7 +1274,6 @@ class OnboardingFrame(wx.Frame):
                 "mode": values.bark_mode,
             },
             feishu={
-                "enabled": values.feishu_enabled,
                 "control_enabled": values.feishu_control_enabled,
                 "mode": values.feishu_mode,
                 "open_id": values.open_id,
@@ -1365,14 +1388,22 @@ class OnboardingFrame(wx.Frame):
 def run_app(
     smoke_test: bool = False,
     onboarding: bool = False,
+    settings_tab: str | None = None,
 ) -> int:
     app = wx.App(False)
-    frame_class = OnboardingFrame if onboarding else SettingsFrame
-    frame = frame_class(
-        app_data_dir() / "config.json",
-        user_home(),
-        installed_executable(),
-    )
+    if onboarding:
+        frame = OnboardingFrame(
+            app_data_dir() / "config.json",
+            user_home(),
+            installed_executable(),
+        )
+    else:
+        frame = SettingsFrame(
+            app_data_dir() / "config.json",
+            user_home(),
+            installed_executable(),
+            settings_tab=settings_tab,
+        )
     if smoke_test:
         frame.Show()
         app.Yield()

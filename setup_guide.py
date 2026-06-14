@@ -45,7 +45,8 @@ def write_config(path: Path, args: argparse.Namespace) -> None:
         bark = config["providers"]["bark"]
         if args.bark_key:
             bark["device_key"] = args.bark_key
-            bark["enabled"] = True
+            if bark.get("mode") == "off":
+                bark["mode"] = "all"
         if args.bark_server:
             bark["server"] = args.bark_server
         if args.bark_mode:
@@ -53,7 +54,8 @@ def write_config(path: Path, args: argparse.Namespace) -> None:
 
         feishu = config["providers"]["feishu"]
         if args.enable_feishu or args.open_id:
-            feishu["enabled"] = True
+            if feishu.get("mode") == "off":
+                feishu["mode"] = "all"
         if args.enable_feishu_control:
             feishu["control_enabled"] = True
         if args.feishu_mode:

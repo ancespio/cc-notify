@@ -98,14 +98,12 @@ class DesktopAppServiceTests(unittest.TestCase):
             values = load_settings_values(path)
 
         self.assertEqual(values.device_key, "secret")
-        self.assertTrue(values.bark_enabled)
         self.assertEqual(values.bark_mode, "ssh-only")
         self.assertEqual(values.server, "https://bark.example")
         self.assertEqual(values.url, "chatgpt://codex")
         self.assertEqual(values.icon, "https://example.com/bark.png")
         self.assertTrue(values.codex)
         self.assertFalse(values.claude)
-        self.assertFalse(values.feishu_enabled)
         self.assertTrue(values.feishu_control_enabled)
         self.assertEqual(values.feishu_mode, "off")
         self.assertEqual(values.open_id, "ou_owner")
@@ -119,15 +117,13 @@ class DesktopAppServiceTests(unittest.TestCase):
             home = root / "home"
             executable = root / "Agent-Notify.exe"
             values = SettingsValues(
-                bark_enabled=False,
                 device_key="new-key",
                 server="https://api.day.app",
                 url="",
                 icon="",
                 bark_mode="off",
-                feishu_enabled=False,
                 feishu_control_enabled=True,
-                feishu_mode="all",
+                feishu_mode="off",
                 open_id="ou_owner",
                 chat_id="oc_private",
                 lark_cli="lark-cli",
@@ -147,7 +143,10 @@ class DesktopAppServiceTests(unittest.TestCase):
             self.assertEqual(bark["device_key"], "new-key")
             self.assertEqual(bark["url"], "chatgpt://codex")
             self.assertEqual(bark["icon"], DEFAULT_BARK_ICON_URL)
-            self.assertFalse(bark["enabled"])
+            self.assertNotIn("enabled", bark)
+            self.assertNotIn(
+                "enabled", saved["providers"]["feishu"]
+            )
             self.assertTrue(
                 saved["providers"]["feishu"]["control_enabled"]
             )
@@ -157,17 +156,15 @@ class DesktopAppServiceTests(unittest.TestCase):
             self.assertTrue((home / ".claude" / "settings.json").exists())
             self.assertEqual(len(changed), 1)
 
-    def test_enabled_bark_requires_key(self):
+    def test_active_bark_requires_key(self):
         values = SettingsValues(
-            bark_enabled=True,
             device_key="",
             server="https://api.day.app",
             url="chatgpt://",
             icon=DEFAULT_BARK_ICON_URL,
             bark_mode="all",
-            feishu_enabled=False,
             feishu_control_enabled=False,
-            feishu_mode="all",
+            feishu_mode="off",
             open_id="",
             chat_id="",
             lark_cli="",
@@ -180,15 +177,13 @@ class DesktopAppServiceTests(unittest.TestCase):
 
     def test_feishu_features_require_open_id_and_cli(self):
         values = SettingsValues(
-            bark_enabled=False,
             device_key="",
             server="https://api.day.app",
             url="chatgpt://",
             icon=DEFAULT_BARK_ICON_URL,
             bark_mode="off",
-            feishu_enabled=False,
             feishu_control_enabled=True,
-            feishu_mode="all",
+            feishu_mode="off",
             open_id="",
             chat_id="",
             lark_cli="",
@@ -202,16 +197,17 @@ class DesktopAppServiceTests(unittest.TestCase):
         values.open_id = "ou_owner"
         with self.assertRaisesRegex(ValueError, "lark-cli"):
             validate_settings(values)
+        values.lark_cli = "lark-cli"
+        with self.assertRaisesRegex(ValueError, "chat_id"):
+            validate_settings(values)
 
     def test_all_notifications_may_be_disabled(self):
         values = SettingsValues(
-            bark_enabled=False,
             device_key="",
             server="https://api.day.app",
             url="chatgpt://",
             icon=DEFAULT_BARK_ICON_URL,
             bark_mode="off",
-            feishu_enabled=False,
             feishu_control_enabled=False,
             feishu_mode="off",
             open_id="",

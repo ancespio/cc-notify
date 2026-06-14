@@ -2,7 +2,6 @@
   "config_version": "1.0.2",
   "providers": {
     "bark": {
-      "enabled": true,
       "mode": "all",
       "server": "https://api.day.app",
       "device_key": "YOUR_BARK_DEVICE_KEY",
@@ -10,13 +9,12 @@
       "sound": "",
       "level": "active",
       "url": "chatgpt://codex",
-      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.2/assets/agent-notify.png",
+      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/master/assets/agent-notify.png",
       "timeout": 8
     },
     "feishu": {
-      "enabled": false,
       "control_enabled": false,
-      "mode": "all",
+      "mode": "off",
       "open_id": "",
       "chat_id": "",
       "lark_cli": "",

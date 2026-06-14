@@ -29,6 +29,10 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--tray", action="store_true")
     parser.add_argument("--smoke-test", action="store_true")
     parser.add_argument("--settings-smoke-test", action="store_true")
+    parser.add_argument(
+        "--settings-tab",
+        choices=("bark", "feishu", "agent"),
+    )
     parser.add_argument("--onboarding", action="store_true")
     parser.add_argument("--onboarding-smoke-test", action="store_true")
     parser.add_argument("--enable-autostart", action="store_true")
@@ -70,10 +74,15 @@ def should_open_settings(args: argparse.Namespace) -> bool:
 def run_settings_app(
     smoke_test: bool = False,
     onboarding: bool = False,
+    settings_tab: str | None = None,
 ) -> int:
     from desktop_app import run_app
 
-    return run_app(smoke_test=smoke_test, onboarding=onboarding)
+    return run_app(
+        smoke_test=smoke_test,
+        onboarding=onboarding,
+        settings_tab=settings_tab,
+    )
 
 
 def read_payload(args: argparse.Namespace) -> dict:
@@ -103,13 +112,20 @@ def main(argv: list[str] | None = None) -> int:
     if args.smoke_test:
         return 0
     if args.settings_smoke_test:
-        return run_settings_app(smoke_test=True)
+        return run_settings_app(
+            smoke_test=True,
+            settings_tab=args.settings_tab,
+        )
     if args.onboarding_smoke_test:
         return run_settings_app(smoke_test=True, onboarding=True)
     if args.onboarding:
         return run_settings_app(smoke_test=False, onboarding=True)
     if should_open_settings(args):
-        return run_settings_app(smoke_test=False, onboarding=False)
+        return run_settings_app(
+            smoke_test=False,
+            onboarding=False,
+            settings_tab=args.settings_tab,
+        )
 
     if (
         args.install_request

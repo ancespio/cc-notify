@@ -14,13 +14,13 @@ Agent-Notify v1.0.2 将 Codex 和 Claude Code 的权限申请、结构化提问�
 4. 按需配置 Bark、飞书、Agent Hook 与登录自启动；任意渠道均可跳过。
 5. 完成向导后重启已安装 Hook 的 Agent。
 
-Bark 与飞书都不是必选项，可以仅启用其中一个、同时启用、全部关闭，或只启用
-飞书远程控制。
+Bark 与飞书都不是必选项，可以将任一渠道设为全部通知、仅 SSH 或关闭，也可以
+在两种通知均关闭时只启用飞书远程控制。
 
 首次配置 Bark：
 
 1. 在 iPhone 安装 Bark，并复制设备 Key。
-2. 在 Bark 标签页启用通知并填写 Key；“显示”开关可反复切换且不会丢失内容。
+2. 在 Bark 标签页填写 Key；“显示”开关可反复切换且不会丢失内容。
 3. 选择全部通知、仅 SSH 或关闭。
 4. 点击“校验图标”，确认远程图片可下载、可解码且尺寸合规。
 5. 点击“发送 Bark 测试通知”，检查 iPhone 通知是否使用 Agent-Notify 自有图标。
@@ -30,7 +30,7 @@ Bark 与飞书都不是必选项，可以仅启用其中一个、同时启用、
 
 ```text
 跳转：chatgpt://codex
-图标：https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.2/assets/agent-notify.png
+图标：https://raw.githubusercontent.com/ancespio/Agent-Notify/master/assets/agent-notify.png
 ```
 
 首次配置飞书：
@@ -109,12 +109,15 @@ Agent-Notify 以轻量通知区域进程运行。托盘菜单可以：
 
 - 分别切换 Bark 与飞书的全部通知、仅 SSH、关闭模式。
 - 发送 Bark 测试通知。
+- 开启或关闭飞书远程控制；配置不完整时会直接打开飞书设置页。
+- 发送飞书测试通知。
 - 打开设置界面。
 - 开启或关闭登录自启动。
 - 退出当前托盘进程。
 
 Hook 通知不依赖托盘进程。托盘只负责状态与设置入口；Hook 触发时，Codex 和
-Claude Code 会短暂启动同一个可执行文件发送通知。
+Claude Code 会短暂启动同一个可执行文件发送通知。托盘悬停提示会直接显示
+Bark、飞书各自的模式及飞书遥控状态；飞书命令修改配置后也会立即刷新。
 
 ## 飞书远程控制
 
@@ -128,9 +131,9 @@ Claude Code 会短暂启动同一个可执行文件发送通知。
 /notify feishu on|ssh|off|status
 ```
 
-`on` 会启用渠道并设为全部通知，`ssh` 会启用渠道并设为仅 SSH，`off`
-会关闭通知渠道。飞书远程控制开关始终独立，不会被 `off` 关闭。
-`/notify status` 会回复两个渠道的启用状态、模式和远程控制状态。
+`on` 将模式设为全部通知，`ssh` 将模式设为仅 SSH，`off` 将模式设为关闭。
+模式本身就是通知开关，不再有单独的“启用渠道”配置。飞书远程控制始终独立，
+不会被 `off` 关闭。`/notify status` 会回复两个渠道的模式和远程控制状态。
 
 控制器只接受配置的 `open_id` 在已发现私聊中的命令。启动时只记录已有消息，
 不会重放历史 `/notify` 命令；重复消息也只处理一次。
@@ -170,19 +173,17 @@ chatgpt://codex
   "config_version": "1.0.2",
   "providers": {
     "bark": {
-      "enabled": true,
       "mode": "all",
       "server": "https://api.day.app",
       "device_key": "YOUR_BARK_DEVICE_KEY",
       "group": "Agent-Notify",
       "url": "chatgpt://codex",
-      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/v1.0.2/assets/agent-notify.png",
+      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/master/assets/agent-notify.png",
       "timeout": 8
     },
     "feishu": {
-      "enabled": false,
       "control_enabled": false,
-      "mode": "all",
+      "mode": "off",
       "open_id": "",
       "chat_id": "",
       "lark_cli": "",
@@ -213,8 +214,12 @@ Windows 程序、托盘、安装器和 Bark 通知默认使用 Agent-Notify 自�
 ## 升级迁移
 
 - 沿用 `%APPDATA%\Agent-Notify\config.json`，保留已有 Bark Key 和 Hook 选择。
-- v1.0.2 首次加载旧配置时会创建时间戳备份并写入 `config_version`。
-- 仅将精确旧默认 `chatgpt://` 和 v1.0.0/v1.0.1 图标迁移为新版默认；
+- v1.0.2 加载含旧字段或旧默认值的配置时会创建时间戳备份；迁移可重复执行且
+  不会重复修改已完成迁移的配置。
+- 旧 `enabled=false` 会迁移为 `mode=off`；`enabled=true` 会保留有效模式，
+  缺少模式时使用 `all`，随后删除 `enabled`。
+- 仅将精确旧默认 `chatgpt://` 和 v1.0.0/v1.0.1/v1.0.2 图标迁移为
+  `master` 图标地址；
   用户自定义跳转和图标保持不变。
 - 旧版顶层 `open_id`、`chat_id` 会迁移到飞书 provider。
 - 旧 `mode.json` 会在首次运行时迁移为 Bark 与飞书各自的模式。
@@ -262,7 +267,7 @@ dist-installer\Agent-Notify-Setup-v1.0.2.exe
   `TE_PASSWORD` 的方式在 Windows 上无效。
 - 图标校验失败：确认 URL 直接返回图片而非 HTML，文件不超过 2 MB，尺寸在
   64 到 4096 像素之间。
-- 没有 Bark 通知：检查 Bark 是否启用、Key 是否正确，以及模式是否为关闭。
+- 没有 Bark 通知：检查 Key 是否正确，以及模式是否为关闭。
 - 托盘 Bark 测试失败：托盘会显示简短原因，完整脱敏日志位于
   `%APPDATA%\Agent-Notify\agent-notify.log`。
 - `lark-cli` 未就绪：依次执行安装、初始化、登录，并用

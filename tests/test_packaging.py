@@ -44,6 +44,10 @@ class PackagingTests(unittest.TestCase):
 
         self.assertIn("点击通知跳转", script)
         self.assertIn("DEFAULT_BARK_URL", script)
+        self.assertIn("wx.ScrolledWindow", script)
+        self.assertIn("wx.RadioButton", script)
+        self.assertNotIn('label="启用 Bark 通知"', script)
+        self.assertNotIn('label="启用飞书通知"', script)
 
     def test_readme_documents_native_question_hook_and_clean_agents(self):
         readme = (ROOT / "README.md").read_text(encoding="utf-8")
@@ -77,8 +81,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('"config_version": "1.0.2"', config)
         self.assertIn('"url": "chatgpt://codex"', config)
         self.assertIn(
-            "Agent-Notify/v1.0.2/assets/agent-notify.png", config
+            "Agent-Notify/master/assets/agent-notify.png", config
         )
+        self.assertNotIn('"enabled"', config)
         self.assertNotIn("Finb/Bark", config)
         self.assertIn('"agents"', config)
 

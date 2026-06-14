@@ -39,24 +39,17 @@ class NotifyCommandTests(unittest.TestCase):
         self.assertIsNone(parse_notify_command("/notify maybe"))
         self.assertIsNone(parse_notify_command("hello"))
 
-    def test_command_changes_modes_without_enabling_channels(self):
+    def test_command_changes_only_modes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "config.json"
-            update_config(
-                path,
-                lambda config: config["providers"]["bark"].update(
-                    {"enabled": False}
-                ),
-            )
-
             reply = execute_notify_command(path, "/notify on")
             config = load_config(path)
 
         self.assertIn("Bark", reply)
-        self.assertTrue(config["providers"]["bark"]["enabled"])
         self.assertEqual(config["providers"]["bark"]["mode"], "all")
-        self.assertTrue(config["providers"]["feishu"]["enabled"])
         self.assertEqual(config["providers"]["feishu"]["mode"], "all")
+        self.assertNotIn("enabled", config["providers"]["bark"])
+        self.assertNotIn("enabled", config["providers"]["feishu"])
 
     def test_ssh_enables_and_off_disables_selected_channel(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -73,9 +66,7 @@ class NotifyCommandTests(unittest.TestCase):
             execute_notify_command(path, "/notify feishu off")
             disabled = load_config(path)["providers"]["feishu"]
 
-        self.assertTrue(enabled["enabled"])
         self.assertEqual(enabled["mode"], "ssh-only")
-        self.assertFalse(disabled["enabled"])
         self.assertEqual(disabled["mode"], "off")
         self.assertTrue(disabled["control_enabled"])
 
@@ -184,9 +175,11 @@ class FeishuControllerTests(unittest.TestCase):
             ),
         )
         self.client = MagicMock()
+        self.on_config_changed = MagicMock()
         self.controller = FeishuController(
             self.config_path,
             self.client,
+            on_config_changed=self.on_config_changed,
         )
 
     def tearDown(self):
@@ -223,6 +216,7 @@ class FeishuControllerTests(unittest.TestCase):
         config = load_config(self.config_path)
         self.assertEqual(config["providers"]["bark"]["mode"], "off")
         self.client.reply.assert_called_once()
+        self.on_config_changed.assert_called_once_with()
 
     def test_wrong_sender_or_chat_is_ignored(self):
         self.controller.process_messages(

@@ -38,7 +38,7 @@ class BarkProviderTests(unittest.TestCase):
     def test_bark_posts_json_without_key_in_url(self, urlopen_mock):
         provider = BarkProvider(
             {
-                "enabled": True,
+                "mode": "off",
                 "server": "https://api.day.app",
                 "device_key": "secret-key",
                 "group": "Agent-Notify",
@@ -58,9 +58,8 @@ class BarkProviderTests(unittest.TestCase):
         self.assertEqual(payload["icon"], DEFAULT_BARK_ICON_URL)
         self.assertIn("Codex", payload["title"])
 
-    def test_bark_disabled_or_missing_key_is_skipped(self):
-        self.assertFalse(BarkProvider({"enabled": False}).send(sample_event()))
-        self.assertFalse(BarkProvider({"enabled": True}).send(sample_event()))
+    def test_bark_missing_key_is_skipped(self):
+        self.assertFalse(BarkProvider({"mode": "all"}).send(sample_event()))
 
     @patch("agent_notify.providers.urlopen")
     def test_bark_error_response_preserves_service_message(self, urlopen):
@@ -71,7 +70,6 @@ class BarkProviderTests(unittest.TestCase):
         urlopen.return_value = response
         provider = BarkProvider(
             {
-                "enabled": True,
                 "server": "https://api.day.app",
                 "device_key": "secret-key",
             }
@@ -89,7 +87,7 @@ class FeishuProviderTests(unittest.TestCase):
         run_mock.return_value.returncode = 0
         provider = FeishuProvider(
             {
-                "enabled": True,
+                "mode": "off",
                 "open_id": "ou_test",
                 "lark_cli": "lark-cli",
             }

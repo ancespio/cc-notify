@@ -16,7 +16,7 @@ CONFIG_VERSION = "1.0.2"
 DEFAULT_BARK_URL = "chatgpt://codex"
 DEFAULT_AGENT_ICON_URL = (
     "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
-    "v1.0.2/assets/agent-notify.png"
+    "master/assets/agent-notify.png"
 )
 DEFAULT_BARK_ICON_URL = DEFAULT_AGENT_ICON_URL
 LEGACY_BARK_URLS = {"", "chatgpt://"}
@@ -30,6 +30,10 @@ LEGACY_AGENT_ICON_URLS = {
         "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
         "v1.0.1/assets/agent-notify.png"
     ),
+    (
+        "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
+        "v1.0.2/assets/agent-notify.png"
+    ),
 }
 VALID_MODES = {"all", "ssh-only", "off"}
 
@@ -38,7 +42,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
     "config_version": CONFIG_VERSION,
     "providers": {
         "bark": {
-            "enabled": True,
             "server": "https://api.day.app",
             "device_key": "",
             "group": "Agent-Notify",
@@ -50,9 +53,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "timeout": 8,
         },
         "feishu": {
-            "enabled": False,
             "control_enabled": False,
-            "mode": "all",
+            "mode": "off",
             "open_id": "",
             "chat_id": "",
             "lark_cli": "",
@@ -82,37 +84,53 @@ def _backup_config(path: Path) -> Path:
 
 def _migrate_raw(raw: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     migrated = deepcopy(raw)
-    if migrated.get("config_version") == CONFIG_VERSION:
-        return migrated, False
+    changed = migrated.get("config_version") != CONFIG_VERSION
 
     providers = migrated.setdefault("providers", {})
     if not isinstance(providers, dict):
         providers = {}
         migrated["providers"] = providers
+        changed = True
     bark = providers.setdefault("bark", {})
     if not isinstance(bark, dict):
         bark = {}
         providers["bark"] = bark
+        changed = True
+    feishu = providers.setdefault("feishu", {})
+    if not isinstance(feishu, dict):
+        feishu = {}
+        providers["feishu"] = feishu
+        changed = True
+
+    for name, settings in (("bark", bark), ("feishu", feishu)):
+        if "enabled" not in settings:
+            continue
+        enabled = bool(settings.pop("enabled"))
+        if not enabled:
+            settings["mode"] = "off"
+        elif "mode" not in settings:
+            settings["mode"] = "all"
+        changed = True
+
     current_url = str(bark.get("url") or "").strip()
     current_icon = str(bark.get("icon") or "").strip()
     if current_url in LEGACY_BARK_URLS:
         bark["url"] = DEFAULT_BARK_URL
+        changed = True
     if current_icon in LEGACY_AGENT_ICON_URLS:
         bark["icon"] = DEFAULT_AGENT_ICON_URL
+        changed = True
 
     if migrated.get("open_id") or migrated.get("chat_id"):
-        feishu = providers.setdefault("feishu", {})
-        if not isinstance(feishu, dict):
-            feishu = {}
-            providers["feishu"] = feishu
-        feishu.setdefault("enabled", True)
+        feishu.setdefault("mode", "all")
         feishu.setdefault("open_id", migrated.get("open_id", ""))
         feishu.setdefault("chat_id", migrated.get("chat_id", ""))
         migrated.pop("open_id", None)
         migrated.pop("chat_id", None)
+        changed = True
 
     migrated["config_version"] = CONFIG_VERSION
-    return migrated, True
+    return migrated, changed
 
 
 def _merge_dict(base: dict[str, Any], override: dict[str, Any]) -> None:
@@ -138,17 +156,19 @@ def normalize_config(raw: Any) -> dict[str, Any]:
     }
     _merge_dict(config, supported)
     bark = config["providers"]["bark"]
+    bark.pop("enabled", None)
     bark["url"] = str(bark.get("url") or "").strip() or DEFAULT_BARK_URL
     bark["icon"] = (
         str(bark.get("icon") or "").strip() or DEFAULT_AGENT_ICON_URL
     )
     bark["mode"] = _normalize_mode(bark.get("mode"))
     feishu = config["providers"]["feishu"]
+    feishu.pop("enabled", None)
     feishu["mode"] = _normalize_mode(feishu.get("mode"))
     feishu["control_enabled"] = bool(feishu.get("control_enabled", False))
 
     if raw.get("open_id") and "providers" not in raw:
-        feishu["enabled"] = True
+        feishu["mode"] = "all"
         feishu["open_id"] = raw.get("open_id", "")
         feishu["chat_id"] = raw.get("chat_id", "")
     return config

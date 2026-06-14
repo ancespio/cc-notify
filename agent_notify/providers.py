@@ -39,8 +39,6 @@ class BarkProvider:
         self.config = dict(config)
 
     def send(self, event: NormalizedEvent) -> bool:
-        if not self.config.get("enabled"):
-            return False
         device_key = str(self.config.get("device_key") or "").strip()
         if not device_key:
             return False
@@ -99,8 +97,6 @@ class FeishuProvider:
         return "lark-cli"
 
     def send(self, event: NormalizedEvent) -> bool:
-        if not self.config.get("enabled"):
-            return False
         open_id = str(self.config.get("open_id") or "").strip()
         if not open_id:
             return False

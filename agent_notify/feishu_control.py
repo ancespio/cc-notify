@@ -62,9 +62,8 @@ def parse_notify_command(text: str) -> NotifyCommand | None:
 
 def _provider_status(name: str, settings: dict[str, Any]) -> str:
     label = "Bark" if name == "bark" else "飞书"
-    enabled = "开启" if settings.get("enabled") else "关闭"
     mode = MODE_LABELS.get(settings.get("mode", "all"), "全部通知")
-    return f"{label}：{enabled}，模式 {mode}"
+    return f"{label}：{mode}"
 
 
 def execute_notify_command(config_path: Path, text: str) -> str:
@@ -75,16 +74,10 @@ def execute_notify_command(config_path: Path, text: str) -> str:
             "/notify bark|feishu on|ssh|off|status"
         )
     if command.action != "status":
-        enabled = command.action != "off"
         update_config(
             config_path,
             lambda config: [
-                config["providers"][name].update(
-                    {
-                        "enabled": enabled,
-                        "mode": command.action,
-                    }
-                )
+                config["providers"][name].update({"mode": command.action})
                 for name in command.targets
             ],
         )
@@ -290,10 +283,12 @@ class FeishuController:
         config_path: Path,
         client: LarkCliClient,
         stop_event: threading.Event | None = None,
+        on_config_changed=None,
     ):
         self.config_path = config_path
         self.client = client
         self.stop_event = stop_event or threading.Event()
+        self.on_config_changed = on_config_changed
         self._processed: set[str] = set()
 
     @staticmethod
@@ -330,6 +325,8 @@ class FeishuController:
             if not text.strip().lower().startswith("/notify"):
                 continue
             reply = execute_notify_command(self.config_path, text)
+            if self.on_config_changed is not None:
+                self.on_config_changed()
             try:
                 self.client.reply(message_id, reply)
             except Exception:

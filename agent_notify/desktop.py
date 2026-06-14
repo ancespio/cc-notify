@@ -22,7 +22,7 @@ from .installer import (
     remove_codex_hooks,
 )
 from .icon_validation import validate_icon_url
-from .providers import BarkProvider
+from .providers import BarkProvider, FeishuProvider
 from .resources import resource_path
 
 
@@ -71,12 +71,12 @@ def save_bark_settings(
         lambda config: (
             config["providers"]["bark"].update(
                 {
-                    "enabled": True,
                     "device_key": device_key.strip(),
                     "server": server.strip().rstrip("/")
                     or "https://api.day.app",
                     "url": url.strip() or DEFAULT_BARK_URL,
                     "icon": icon.strip() or DEFAULT_AGENT_ICON_URL,
+                    "mode": "all",
                 }
             ),
             config["agents"].update(
@@ -96,7 +96,6 @@ def save_provider_settings(
         bark_settings = config["providers"]["bark"]
         bark_settings.update(
             {
-                "enabled": bool(bark.get("enabled")),
                 "device_key": str(bark.get("device_key") or "").strip(),
                 "server": str(
                     bark.get("server") or "https://api.day.app"
@@ -111,7 +110,6 @@ def save_provider_settings(
         feishu_settings = config["providers"]["feishu"]
         feishu_settings.update(
             {
-                "enabled": bool(feishu.get("enabled")),
                 "control_enabled": bool(
                     feishu.get("control_enabled")
                 ),
@@ -230,8 +228,6 @@ def remove_hooks(home: Path) -> list[Path]:
 def send_test_notification(config_path: Path) -> bool:
     config = load_config(config_path)
     bark = config["providers"]["bark"]
-    if not bark.get("enabled"):
-        raise BarkTestError("configuration", "Bark 通知尚未启用。")
     if not str(bark.get("device_key") or "").strip():
         raise BarkTestError(
             "configuration", "请先配置有效的 Bark Key。"
@@ -278,6 +274,27 @@ def send_test_notification(config_path: Path) -> bool:
         raise BarkTestError(
             "push", "Bark 服务未返回成功状态，请检查 Key 和服务器。"
         )
+    return True
+
+
+def send_feishu_test_notification(config_path: Path) -> bool:
+    config = load_config(config_path)
+    feishu = config["providers"]["feishu"]
+    if not str(feishu.get("open_id") or "").strip():
+        raise ValueError("请先配置飞书 open_id。")
+    if not str(feishu.get("lark_cli") or "").strip():
+        raise ValueError("请先配置 lark-cli 路径。")
+    provider = FeishuProvider(feishu)
+    sent = provider.send(
+        NormalizedEvent(
+            source="codex",
+            kind="stop",
+            workspace="Agent-Notify",
+            summary="飞书测试通知发送成功。",
+        )
+    )
+    if not sent:
+        raise OSError("飞书测试消息发送失败，请检查登录和身份配置。")
     return True
 
 

@@ -23,7 +23,7 @@ class ConfigTests(unittest.TestCase):
     def test_missing_config_uses_safe_defaults(self):
         config = load_config(Path("does-not-exist.json"))
 
-        self.assertTrue(config["providers"]["bark"]["enabled"])
+        self.assertNotIn("enabled", config["providers"]["bark"])
         self.assertEqual(config["providers"]["bark"]["device_key"], "")
         self.assertEqual(
             config["providers"]["bark"]["url"],
@@ -36,11 +36,11 @@ class ConfigTests(unittest.TestCase):
         self.assertEqual(config["providers"]["bark"]["mode"], "all")
         self.assertTrue(config["agents"]["codex"])
         self.assertTrue(config["agents"]["claude"])
-        self.assertFalse(config["providers"]["feishu"]["enabled"])
+        self.assertNotIn("enabled", config["providers"]["feishu"])
         self.assertFalse(
             config["providers"]["feishu"]["control_enabled"]
         )
-        self.assertEqual(config["providers"]["feishu"]["mode"], "all")
+        self.assertEqual(config["providers"]["feishu"]["mode"], "off")
         self.assertEqual(config["config_version"], CONFIG_VERSION)
 
     def test_empty_legacy_url_and_icon_use_new_defaults(self):
@@ -94,7 +94,7 @@ class ConfigTests(unittest.TestCase):
             first["providers"]["bark"]["url"], "chatgpt://codex"
         )
         self.assertIn(
-            "v1.0.2/assets/agent-notify.png",
+            "master/assets/agent-notify.png",
             first["providers"]["bark"]["icon"],
         )
         self.assertEqual(
@@ -138,11 +138,48 @@ class ConfigTests(unittest.TestCase):
 
             config = load_config(path)
 
-        self.assertTrue(config["providers"]["feishu"]["enabled"])
+        self.assertEqual(config["providers"]["feishu"]["mode"], "all")
+        self.assertNotIn("enabled", config["providers"]["feishu"])
         self.assertEqual(config["providers"]["feishu"]["open_id"], "ou_legacy")
         self.assertEqual(config["providers"]["feishu"]["chat_id"], "oc_legacy")
         self.assertNotIn("open_id", config)
         self.assertNotIn("chat_id", config)
+
+    def test_current_version_enabled_fields_are_normalized_to_modes(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "config_version": CONFIG_VERSION,
+                        "providers": {
+                            "bark": {
+                                "enabled": False,
+                                "mode": "all",
+                            },
+                            "feishu": {
+                                "enabled": True,
+                                "mode": "ssh-only",
+                            },
+                        },
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+            persisted = json.loads(path.read_text(encoding="utf-8"))
+            backups = list(
+                path.parent.glob("config.json.agent-notify-backup-*")
+            )
+
+        self.assertEqual(config["providers"]["bark"]["mode"], "off")
+        self.assertEqual(
+            config["providers"]["feishu"]["mode"], "ssh-only"
+        )
+        self.assertNotIn("enabled", persisted["providers"]["bark"])
+        self.assertNotIn("enabled", persisted["providers"]["feishu"])
+        self.assertEqual(len(backups), 1)
 
     def test_legacy_mode_file_is_migrated_into_provider_modes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -301,8 +338,8 @@ class RuntimeTests(unittest.TestCase):
         config = {
             "events": {"stop": True},
             "providers": {
-                "bark": {"enabled": True, "mode": "off"},
-                "feishu": {"enabled": True, "mode": "all"},
+                "bark": {"mode": "off"},
+                "feishu": {"mode": "all"},
             },
         }
 

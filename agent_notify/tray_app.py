@@ -14,9 +14,13 @@ from PIL import Image, ImageEnhance
 import pystray
 
 from .config import load_config, update_config
-from .desktop import send_test_notification
+from .desktop import (
+    send_feishu_test_notification,
+    send_test_notification,
+)
 from .diagnostics import write_diagnostic
 from .feishu_control import FeishuController, LarkCliClient
+from .feishu_control import MODE_LABELS
 from .resources import resource_path
 
 
@@ -155,10 +159,52 @@ def set_provider_mode(
     )
 
 
+def notification_status_text(config: Mapping[str, Any]) -> str:
+    providers = config.get("providers", {})
+    bark = providers.get("bark", {})
+    feishu = providers.get("feishu", {})
+    bark_mode = MODE_LABELS.get(bark.get("mode", "all"), "全部通知")
+    feishu_mode = MODE_LABELS.get(
+        feishu.get("mode", "off"), "关闭"
+    )
+    control = "开启" if feishu.get("control_enabled") else "关闭"
+    return (
+        f"Agent-Notify | Bark：{bark_mode} | "
+        f"飞书：{feishu_mode} | 遥控：{control}"
+    )
+
+
+def feishu_control_missing_fields(
+    settings: Mapping[str, Any],
+) -> tuple[str, ...]:
+    fields = (
+        ("lark-cli", settings.get("lark_cli")),
+        ("open_id", settings.get("open_id")),
+        ("chat_id", settings.get("chat_id")),
+    )
+    return tuple(label for label, value in fields if not str(value or "").strip())
+
+
+def set_feishu_control(config_path: Path, enabled: bool) -> None:
+    if enabled:
+        settings = load_config(config_path)["providers"]["feishu"]
+        missing = feishu_control_missing_fields(settings)
+        if missing:
+            raise ValueError(
+                "启用飞书遥控前请先配置：" + "、".join(missing)
+            )
+    update_config(
+        config_path,
+        lambda config: config["providers"]["feishu"].update(
+            {"control_enabled": enabled}
+        ),
+    )
+
+
 def _notifications_enabled(config_path: Path) -> bool:
     config = load_config(config_path)
     return any(
-        settings.get("enabled") and settings.get("mode") != "off"
+        settings.get("mode") != "off"
         for settings in config["providers"].values()
     )
 
@@ -175,6 +221,7 @@ def _default_lark_cli() -> str:
 
 def build_feishu_controller(
     config_path: Path,
+    on_config_changed=None,
 ) -> FeishuController | None:
     settings = load_config(config_path)["providers"]["feishu"]
     if not settings.get("control_enabled"):
@@ -183,7 +230,11 @@ def build_feishu_controller(
         str(settings.get("lark_cli") or _default_lark_cli()),
         float(settings.get("timeout", 10)),
     )
-    return FeishuController(config_path, client)
+    return FeishuController(
+        config_path,
+        client,
+        on_config_changed=on_config_changed,
+    )
 
 
 def restart_tray(
@@ -294,27 +345,50 @@ def run_tray(
     load_config(config_path, legacy_mode_path)
 
     icon_ref: list[pystray.Icon | None] = [None]
-    controller = build_feishu_controller(config_path)
-    controller_thread = None
-    if controller is not None:
-        controller_thread = threading.Thread(
-            target=controller.run,
-            daemon=True,
-        )
-        controller_thread.start()
+    controller_ref: list[FeishuController | None] = [None]
+    controller_thread_ref: list[threading.Thread | None] = [None]
 
     def refresh_icon() -> None:
         icon = icon_ref[0]
         if icon is None:
             return
+        config = load_config(config_path)
         enabled = _notifications_enabled(config_path)
         icon.icon = _make_icon(enabled)
-        icon.title = (
-            "Agent-Notify: 通知已开启"
-            if enabled
-            else "Agent-Notify: 通知已关闭"
-        )
+        icon.title = notification_status_text(config)
         icon.update_menu()
+
+    def start_controller() -> None:
+        thread = controller_thread_ref[0]
+        if thread is not None and thread.is_alive():
+            return
+        controller = build_feishu_controller(
+            config_path,
+            on_config_changed=refresh_icon,
+        )
+        if controller is None:
+            return
+        thread = threading.Thread(
+            target=controller.run,
+            daemon=True,
+        )
+        controller_ref[0] = controller
+        controller_thread_ref[0] = thread
+        thread.start()
+
+    def stop_controller() -> None:
+        controller = controller_ref[0]
+        if controller is not None:
+            controller.stop_event.set()
+        controller_ref[0] = None
+        controller_thread_ref[0] = None
+
+    def sync_controller() -> None:
+        settings = load_config(config_path)["providers"]["feishu"]
+        if settings.get("control_enabled"):
+            start_controller()
+        else:
+            stop_controller()
 
     def set_mode(provider: str, mode: str):
         def callback(
@@ -348,7 +422,7 @@ def run_tray(
             ]
         )
 
-    def send_test(
+    def send_bark_test(
         icon: pystray.Icon, _item: pystray.MenuItem
     ) -> None:
         def worker() -> None:
@@ -378,6 +452,58 @@ def run_tray(
             )
 
         threading.Thread(target=worker, daemon=True).start()
+
+    def send_feishu_test(
+        icon: pystray.Icon, _item: pystray.MenuItem
+    ) -> None:
+        def worker() -> None:
+            error = ""
+            try:
+                ok = send_feishu_test_notification(config_path)
+            except Exception as exc:
+                ok = False
+                error = str(exc)
+                config = load_config(config_path)
+                bark = config["providers"]["bark"]
+                feishu = config["providers"]["feishu"]
+                write_diagnostic(
+                    config_path.parent / "agent-notify.log",
+                    f"Feishu test failed: {error}",
+                    secrets=(
+                        bark.get("device_key", ""),
+                        feishu.get("open_id", ""),
+                        feishu.get("chat_id", ""),
+                    ),
+                )
+            _notify(
+                icon,
+                "飞书测试消息已发送。"
+                if ok
+                else f"飞书测试失败：{error[:80]}",
+            )
+
+        threading.Thread(target=worker, daemon=True).start()
+
+    def toggle_feishu_control(
+        icon: pystray.Icon, _item: pystray.MenuItem
+    ) -> None:
+        settings = load_config(config_path)["providers"]["feishu"]
+        target = not bool(settings.get("control_enabled"))
+        try:
+            set_feishu_control(config_path, target)
+        except ValueError as exc:
+            _notify(icon, str(exc))
+            try:
+                launch_self(
+                    executable,
+                    "--settings-tab",
+                    "feishu",
+                )
+            except OSError:
+                pass
+            return
+        sync_controller()
+        refresh_icon()
 
     def toggle_autostart(
         icon: pystray.Icon, _item: pystray.MenuItem
@@ -409,14 +535,40 @@ def run_tray(
 
     menu = pystray.Menu(
         pystray.MenuItem(
-            "Bark 模式",
+            lambda _item: (
+                "Bark："
+                + MODE_LABELS.get(
+                    load_config(config_path)["providers"]["bark"][
+                        "mode"
+                    ],
+                    "全部通知",
+                )
+            ),
             mode_menu("bark"),
         ),
         pystray.MenuItem(
-            "飞书模式",
+            lambda _item: (
+                "飞书："
+                + MODE_LABELS.get(
+                    load_config(config_path)["providers"]["feishu"][
+                        "mode"
+                    ],
+                    "关闭",
+                )
+            ),
             mode_menu("feishu"),
         ),
-        pystray.MenuItem("发送 Bark 测试通知", send_test),
+        pystray.MenuItem(
+            "启用飞书遥控",
+            toggle_feishu_control,
+            checked=lambda _item: bool(
+                load_config(config_path)["providers"]["feishu"].get(
+                    "control_enabled"
+                )
+            ),
+        ),
+        pystray.MenuItem("发送 Bark 测试通知", send_bark_test),
+        pystray.MenuItem("发送飞书测试消息", send_feishu_test),
         pystray.MenuItem("打开设置", open_settings),
         pystray.MenuItem(
             "登录时自动启动",
@@ -429,18 +581,18 @@ def run_tray(
     icon = pystray.Icon(
         "agent-notify",
         _make_icon(_notifications_enabled(config_path)),
-        "Agent-Notify",
+        notification_status_text(load_config(config_path)),
         menu,
     )
     icon_ref[0] = icon
+    sync_controller()
     threading.Thread(
         target=_watch_stop_event, args=(icon,), daemon=True
     ).start()
     try:
         icon.run()
     finally:
-        if controller is not None:
-            controller.stop_event.set()
+        stop_controller()
         if mutex_handle and KERNEL32 is not None:
             KERNEL32.CloseHandle(mutex_handle)
     return 0

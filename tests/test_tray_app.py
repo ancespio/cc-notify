@@ -5,13 +5,17 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
+from agent_notify.config import load_config
 from agent_notify.tray_app import (
     RUN_VALUE_NAME,
     _make_icon,
     autostart_command,
     build_feishu_controller,
+    feishu_control_missing_fields,
     is_autostart_enabled,
+    notification_status_text,
     restart_tray,
+    set_feishu_control,
     set_provider_mode,
     settings_command,
     set_autostart,
@@ -105,7 +109,79 @@ class TrayAppTests(unittest.TestCase):
             config = json.loads(path.read_text(encoding="utf-8"))
 
         self.assertEqual(config["providers"]["bark"]["mode"], "off")
-        self.assertEqual(config["providers"]["feishu"]["mode"], "all")
+        self.assertEqual(config["providers"]["feishu"]["mode"], "off")
+
+    def test_notification_status_text_lists_both_modes_and_control(self):
+        text = notification_status_text(
+            {
+                "providers": {
+                    "bark": {"mode": "all"},
+                    "feishu": {
+                        "mode": "ssh-only",
+                        "control_enabled": True,
+                    },
+                }
+            }
+        )
+
+        self.assertEqual(
+            text,
+            "Agent-Notify | Bark：全部通知 | 飞书：仅 SSH | 遥控：开启",
+        )
+
+    def test_feishu_control_missing_fields_reports_prerequisites(self):
+        missing = feishu_control_missing_fields(
+            {
+                "lark_cli": "",
+                "open_id": "",
+                "chat_id": "",
+            }
+        )
+
+        self.assertEqual(missing, ("lark-cli", "open_id", "chat_id"))
+
+    def test_set_feishu_control_rejects_incomplete_configuration(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+
+            with self.assertRaisesRegex(ValueError, "open_id"):
+                set_feishu_control(path, True)
+
+            config = load_config(path)
+
+        self.assertFalse(
+            config["providers"]["feishu"]["control_enabled"]
+        )
+
+    def test_set_feishu_control_can_be_enabled_and_disabled(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "feishu": {
+                                "lark_cli": "lark-cli",
+                                "open_id": "ou_owner",
+                                "chat_id": "oc_private",
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            set_feishu_control(path, True)
+            enabled = json.loads(path.read_text(encoding="utf-8"))
+            set_feishu_control(path, False)
+            disabled = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertTrue(
+            enabled["providers"]["feishu"]["control_enabled"]
+        )
+        self.assertFalse(
+            disabled["providers"]["feishu"]["control_enabled"]
+        )
 
     def test_feishu_controller_is_created_only_when_enabled(self):
         with tempfile.TemporaryDirectory() as temp_dir:
