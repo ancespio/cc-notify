@@ -5,14 +5,14 @@ import threading
 import unittest
 from pathlib import Path
 
-from agent_notify.config import (
+from agents_notify.config import (
     CONFIG_VERSION,
     DEFAULT_AGENT_ICON_URL,
     DEFAULT_BARK_URL,
     load_config,
     update_config,
 )
-from agent_notify.runtime import (
+from agents_notify.runtime import (
     build_providers,
     handle_payload,
     should_notify_for_mode,
@@ -85,7 +85,7 @@ class ConfigTests(unittest.TestCase):
 
             first = load_config(path)
             backups = list(
-                path.parent.glob("config.json.agent-notify-backup-*")
+                path.parent.glob("config.json.agents-notify-backup-*")
             )
             second = load_config(path)
 
@@ -94,7 +94,7 @@ class ConfigTests(unittest.TestCase):
             first["providers"]["bark"]["url"], "chatgpt://codex"
         )
         self.assertIn(
-            "master/assets/agent-notify.png",
+            "master/assets/agents-notify.png",
             first["providers"]["bark"]["icon"],
         )
         self.assertEqual(
@@ -170,7 +170,7 @@ class ConfigTests(unittest.TestCase):
             config = load_config(path)
             persisted = json.loads(path.read_text(encoding="utf-8"))
             backups = list(
-                path.parent.glob("config.json.agent-notify-backup-*")
+                path.parent.glob("config.json.agents-notify-backup-*")
             )
 
         self.assertEqual(config["providers"]["bark"]["mode"], "off")

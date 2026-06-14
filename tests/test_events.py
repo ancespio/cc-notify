@@ -1,6 +1,6 @@
 import unittest
 
-from agent_notify.events import normalize_event
+from agents_notify.events import normalize_event
 
 
 class NormalizeEventTests(unittest.TestCase):

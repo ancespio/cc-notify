@@ -25,9 +25,10 @@ from .resources import resource_path
 
 
 RUN_KEY = r"Software\Microsoft\Windows\CurrentVersion\Run"
-RUN_VALUE_NAME = "Agent-Notify"
-MUTEX_NAME = r"Local\Agent-Notify-Tray"
-STOP_EVENT_NAME = r"Local\Agent-Notify-Tray-Stop"
+RUN_VALUE_NAME = "Agents-Notify"
+LEGACY_RUN_VALUE_NAME = "Agent-Notify"
+MUTEX_NAME = r"Local\Agents-Notify-Tray"
+STOP_EVENT_NAME = r"Local\Agents-Notify-Tray-Stop"
 ERROR_ALREADY_EXISTS = 183
 EVENT_MODIFY_STATE = 0x0002
 WAIT_INFINITE = 0xFFFFFFFF
@@ -125,11 +126,16 @@ def set_autostart(
                 registry.REG_SZ,
                 autostart_command(executable),
             )
-        else:
             try:
-                registry.DeleteValue(key, RUN_VALUE_NAME)
+                registry.DeleteValue(key, LEGACY_RUN_VALUE_NAME)
             except FileNotFoundError:
                 pass
+        else:
+            for value_name in (RUN_VALUE_NAME, LEGACY_RUN_VALUE_NAME):
+                try:
+                    registry.DeleteValue(key, value_name)
+                except FileNotFoundError:
+                    pass
 
 
 def is_autostart_enabled(
@@ -146,6 +152,24 @@ def is_autostart_enabled(
     except FileNotFoundError:
         return False
     return str(value).casefold() == autostart_command(executable).casefold()
+
+
+def migrate_legacy_autostart(
+    executable: Path,
+    registry: Any = None,
+) -> bool:
+    if registry is None:
+        import winreg as registry
+
+    try:
+        with registry.OpenKey(
+            registry.HKEY_CURRENT_USER, RUN_KEY
+        ) as key:
+            registry.QueryValueEx(key, LEGACY_RUN_VALUE_NAME)
+    except FileNotFoundError:
+        return False
+    set_autostart(True, executable, registry)
+    return True
 
 
 def set_provider_mode(
@@ -169,7 +193,7 @@ def notification_status_text(config: Mapping[str, Any]) -> str:
     )
     control = "开启" if feishu.get("control_enabled") else "关闭"
     return (
-        f"Agent-Notify | Bark：{bark_mode} | "
+        f"Agents-Notify | Bark：{bark_mode} | "
         f"飞书：{feishu_mode} | 遥控：{control}"
     )
 
@@ -267,7 +291,7 @@ def restart_tray(
 
 
 def _make_icon(enabled: bool) -> Image.Image:
-    with Image.open(resource_path("assets/agent-notify.png")) as source:
+    with Image.open(resource_path("assets/agents-notify.png")) as source:
         image = source.convert("RGBA").resize(
             (64, 64),
             Image.Resampling.LANCZOS,
@@ -280,7 +304,7 @@ def _make_icon(enabled: bool) -> Image.Image:
 
 def _notify(icon: pystray.Icon, message: str) -> None:
     try:
-        icon.notify(message, "Agent-Notify")
+        icon.notify(message, "Agents-Notify")
     except Exception:
         pass
 
@@ -436,7 +460,7 @@ def run_tray(
                 bark = config["providers"]["bark"]
                 feishu = config["providers"]["feishu"]
                 write_diagnostic(
-                    config_path.parent / "agent-notify.log",
+                    config_path.parent / "agents-notify.log",
                     f"Bark test failed: {error}",
                     secrets=(
                         bark.get("device_key", ""),
@@ -467,7 +491,7 @@ def run_tray(
                 bark = config["providers"]["bark"]
                 feishu = config["providers"]["feishu"]
                 write_diagnostic(
-                    config_path.parent / "agent-notify.log",
+                    config_path.parent / "agents-notify.log",
                     f"Feishu test failed: {error}",
                     secrets=(
                         bark.get("device_key", ""),
@@ -523,7 +547,7 @@ def run_tray(
             launch_self(executable)
         except OSError as exc:
             write_diagnostic(
-                config_path.parent / "agent-notify.log",
+                config_path.parent / "agents-notify.log",
                 f"Open settings failed: {exc}",
             )
             _notify(icon, f"无法打开设置：{exc}")
@@ -579,7 +603,7 @@ def run_tray(
         pystray.MenuItem("退出", exit_tray),
     )
     icon = pystray.Icon(
-        "agent-notify",
+        "agents-notify",
         _make_icon(_notifications_enabled(config_path)),
         notification_status_text(load_config(config_path)),
         menu,

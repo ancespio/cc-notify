@@ -4,8 +4,8 @@ import unittest
 from pathlib import Path
 from unittest.mock import MagicMock
 
-from agent_notify.config import load_config, update_config
-from agent_notify.feishu_control import (
+from agents_notify.config import load_config, update_config
+from agents_notify.feishu_control import (
     FeishuController,
     LarkCliClient,
     execute_notify_command,

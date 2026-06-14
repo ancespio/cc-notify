@@ -4,12 +4,14 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 
-from agent_notify.desktop import (
+from agents_notify.desktop import (
     BarkTestError,
     apply_install_request,
     app_data_dir,
     backup_file,
     connect_feishu,
+    legacy_app_data_dir,
+    migrate_legacy_brand_data,
     save_bark_settings,
     save_provider_settings,
     send_feishu_test_notification,
@@ -17,12 +19,12 @@ from agent_notify.desktop import (
     sync_hooks,
     user_home,
 )
-from agent_notify.config import DEFAULT_AGENT_ICON_URL
+from agents_notify.config import DEFAULT_AGENT_ICON_URL
 
 
 class DesktopServiceTests(unittest.TestCase):
-    @patch("agent_notify.desktop.BarkProvider")
-    @patch("agent_notify.desktop.validate_icon_url")
+    @patch("agents_notify.desktop.BarkProvider")
+    @patch("agents_notify.desktop.validate_icon_url")
     def test_bark_test_validates_icon_before_sending(
         self, validate_icon, provider_class
     ):
@@ -54,7 +56,7 @@ class DesktopServiceTests(unittest.TestCase):
         self.assertEqual(caught.exception.stage, "configuration")
         self.assertIn("Bark Key", str(caught.exception))
 
-    @patch("agent_notify.desktop.validate_icon_url")
+    @patch("agents_notify.desktop.validate_icon_url")
     def test_bark_test_reports_icon_stage(self, validate_icon):
         validate_icon.side_effect = OSError("remote icon is unavailable")
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -67,8 +69,8 @@ class DesktopServiceTests(unittest.TestCase):
         self.assertEqual(caught.exception.stage, "icon")
         self.assertNotIn("device-key", str(caught.exception))
 
-    @patch("agent_notify.desktop.BarkProvider")
-    @patch("agent_notify.desktop.validate_icon_url")
+    @patch("agents_notify.desktop.BarkProvider")
+    @patch("agents_notify.desktop.validate_icon_url")
     def test_bark_test_reports_push_stage(
         self, _validate_icon, provider_class
     ):
@@ -86,8 +88,156 @@ class DesktopServiceTests(unittest.TestCase):
         path = app_data_dir({"APPDATA": "C:/Users/Test/AppData/Roaming"})
 
         self.assertEqual(
+            path, Path("C:/Users/Test/AppData/Roaming/Agents-Notify")
+        )
+
+    def test_legacy_app_data_dir_uses_old_brand(self):
+        path = legacy_app_data_dir(
+            {"APPDATA": "C:/Users/Test/AppData/Roaming"}
+        )
+
+        self.assertEqual(
             path, Path("C:/Users/Test/AppData/Roaming/Agent-Notify")
         )
+
+    def test_brand_migration_copies_old_config_and_preserves_secrets(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old_dir = root / "Agent-Notify"
+            new_dir = root / "Agents-Notify"
+            old_dir.mkdir()
+            old_config = {
+                "config_version": "1.0.2",
+                "providers": {
+                    "bark": {
+                        "device_key": "secret-bark-key",
+                        "group": "Agent-Notify",
+                        "icon": (
+                            "https://raw.githubusercontent.com/ancespio/"
+                            "Agent-Notify/master/assets/agent-notify.png"
+                        ),
+                        "mode": "ssh-only",
+                    },
+                    "feishu": {
+                        "control_enabled": True,
+                        "mode": "all",
+                        "open_id": "ou_secret",
+                        "chat_id": "oc_secret",
+                    },
+                },
+                "agents": {"codex": True, "claude": False},
+            }
+            (old_dir / "config.json").write_text(
+                json.dumps(old_config), encoding="utf-8"
+            )
+            (old_dir / "mode.json").write_text(
+                '{"mode": "ssh-only"}', encoding="utf-8"
+            )
+
+            migrated = migrate_legacy_brand_data(new_dir, old_dir)
+            first_text = (new_dir / "config.json").read_text(
+                encoding="utf-8"
+            )
+            migrate_legacy_brand_data(new_dir, old_dir)
+            second_text = (new_dir / "config.json").read_text(
+                encoding="utf-8"
+            )
+            old_config_still_exists = (old_dir / "config.json").exists()
+            migrated_mode = (new_dir / "mode.json").read_text(
+                encoding="utf-8"
+            )
+
+        self.assertTrue(migrated)
+        self.assertEqual(first_text, second_text)
+        config = json.loads(first_text)
+        self.assertEqual(
+            config["providers"]["bark"]["device_key"],
+            "secret-bark-key",
+        )
+        self.assertEqual(config["providers"]["feishu"]["open_id"], "ou_secret")
+        self.assertEqual(config["providers"]["feishu"]["chat_id"], "oc_secret")
+        self.assertEqual(config["providers"]["bark"]["group"], "Agents-Notify")
+        self.assertIn(
+            "Agents-Notify/master/assets/agents-notify.png",
+            config["providers"]["bark"]["icon"],
+        )
+        self.assertTrue(old_config_still_exists)
+        self.assertEqual(migrated_mode, '{"mode": "ssh-only"}')
+
+    def test_brand_migration_preserves_custom_icon_and_existing_new_config(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old_dir = root / "Agent-Notify"
+            new_dir = root / "Agents-Notify"
+            old_dir.mkdir()
+            new_dir.mkdir()
+            (old_dir / "config.json").write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "bark": {
+                                "device_key": "old-key",
+                                "icon": "https://example.com/custom.png",
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (new_dir / "config.json").write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "bark": {
+                                "device_key": "new-key",
+                                "icon": "https://example.com/new.png",
+                            }
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            migrated = migrate_legacy_brand_data(new_dir, old_dir)
+            config = json.loads(
+                (new_dir / "config.json").read_text(encoding="utf-8")
+            )
+
+        self.assertFalse(migrated)
+        self.assertEqual(config["providers"]["bark"]["device_key"], "new-key")
+        self.assertEqual(
+            config["providers"]["bark"]["icon"],
+            "https://example.com/new.png",
+        )
+
+    def test_brand_migration_applies_legacy_mode_file(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            root = Path(temp_dir)
+            old_dir = root / "Agent-Notify"
+            new_dir = root / "Agents-Notify"
+            old_dir.mkdir()
+            (old_dir / "config.json").write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "bark": {"device_key": "keep-key"},
+                            "feishu": {},
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+            (old_dir / "mode.json").write_text(
+                '{"mode": "ssh-only"}', encoding="utf-8"
+            )
+
+            migrate_legacy_brand_data(new_dir, old_dir)
+            config = json.loads(
+                (new_dir / "config.json").read_text(encoding="utf-8")
+            )
+
+        self.assertEqual(config["providers"]["bark"]["mode"], "ssh-only")
+        self.assertEqual(config["providers"]["feishu"]["mode"], "ssh-only")
 
     def test_user_home_supports_test_override(self):
         path = user_home(
@@ -160,7 +310,7 @@ class DesktopServiceTests(unittest.TestCase):
             self.assertIsNotNone(backup)
             self.assertTrue(backup.exists())
             self.assertEqual(backup.read_text(encoding="utf-8"), '{"hooks": {}}')
-            self.assertIn(".agent-notify-backup-", backup.name)
+            self.assertIn(".agents-notify-backup-", backup.name)
 
     def test_apply_install_request_configures_bark_and_selected_hooks(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -168,7 +318,7 @@ class DesktopServiceTests(unittest.TestCase):
             request = root / "install-request.json"
             config = root / "appdata" / "config.json"
             home = root / "home"
-            hook_exe = root / "Agent-Notify.exe"
+            hook_exe = root / "Agents-Notify.exe"
             request.write_text(
                 json.dumps(
                     {
@@ -243,7 +393,7 @@ class DesktopServiceTests(unittest.TestCase):
         self.assertTrue(config["agents"]["codex"])
         self.assertFalse(config["agents"]["claude"])
 
-    @patch("agent_notify.desktop.FeishuProvider")
+    @patch("agents_notify.desktop.FeishuProvider")
     def test_feishu_test_uses_real_notification_even_when_mode_is_off(
         self, provider_class
     ):
@@ -303,10 +453,10 @@ class DesktopServiceTests(unittest.TestCase):
                 encoding="utf-8",
             )
 
-            from agent_notify.desktop import install_hooks
+            from agents_notify.desktop import install_hooks
 
             changed = install_hooks(
-                home, root / "Agent-Notify.exe", codex=True, claude=False
+                home, root / "Agents-Notify.exe", codex=True, claude=False
             )
 
             text = agents.read_text(encoding="utf-8")
@@ -314,11 +464,11 @@ class DesktopServiceTests(unittest.TestCase):
             self.assertNotIn("agent-notify:question-hook", text)
             self.assertIn(agents, changed)
 
-    def test_sync_hooks_removes_only_disabled_agent_notify_hooks(self):
+    def test_sync_hooks_removes_only_disabled_agents_notify_hooks(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             root = Path(temp_dir)
             home = root / "home"
-            executable = root / "Agent-Notify.exe"
+            executable = root / "Agents-Notify.exe"
 
             sync_hooks(
                 home,

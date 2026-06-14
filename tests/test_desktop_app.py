@@ -5,7 +5,7 @@ from pathlib import Path
 
 import wx
 
-from agent_notify.config import DEFAULT_BARK_ICON_URL
+from agents_notify.config import DEFAULT_BARK_ICON_URL
 from desktop_app import (
     SecretField,
     SettingsValues,
@@ -56,7 +56,7 @@ class DesktopAppServiceTests(unittest.TestCase):
             "chatgpt://codex",
             (
                 "https://raw.githubusercontent.com/ancespio/"
-                "Agent-Notify/v1.0.2/assets/agent-notify.png"
+                "Agents-Notify/v1.0.2/assets/agents-notify.png"
             ),
         )
 
@@ -115,7 +115,7 @@ class DesktopAppServiceTests(unittest.TestCase):
             root = Path(temp_dir)
             config = root / "config.json"
             home = root / "home"
-            executable = root / "Agent-Notify.exe"
+            executable = root / "Agents-Notify.exe"
             values = SettingsValues(
                 device_key="new-key",
                 server="https://api.day.app",

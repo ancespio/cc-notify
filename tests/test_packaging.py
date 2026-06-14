@@ -10,28 +10,38 @@ class PackagingTests(unittest.TestCase):
         ignore = (ROOT / ".gitignore").read_text(encoding="utf-8")
 
         self.assertIn("config.json", ignore)
-        self.assertIn("config.json.agent-notify-backup-*", ignore)
-        self.assertIn("agent-notify.log", ignore)
+        self.assertIn("config.json.agents-notify-backup-*", ignore)
+        self.assertIn("agents-notify.log", ignore)
         self.assertIn("*.log", ignore)
 
     def test_installer_starts_tray_and_manages_autostart(self):
-        script = (ROOT / "installer" / "Agent-Notify.iss").read_text(
+        script = (ROOT / "installer" / "Agents-Notify.iss").read_text(
             encoding="utf-8"
         )
 
         self.assertIn('#define AppVersion "1.0.2"', script)
-        self.assertIn("Agent-Notify-Setup-v1.0.2", script)
-        self.assertIn("SetupIconFile=..\\build\\agent-notify.ico", script)
+        self.assertIn("Agents-Notify-Setup-v1.0.2", script)
+        self.assertIn("SetupIconFile=..\\build\\agents-notify.ico", script)
+        self.assertIn("UsePreviousGroup=no", script)
         self.assertIn("[Icons]", script)
-        self.assertIn("Agent-Notify 设置", script)
+        self.assertIn("Agents-Notify 设置", script)
         self.assertIn("[Run]", script)
         self.assertIn("postinstall", script)
         self.assertIn("--onboarding", script)
         self.assertIn("--stop-tray --disable-autostart", script)
         self.assertIn("Sleep(2000)", script)
-        self.assertIn("是否同时删除 Agent-Notify 的用户配置", script)
+        self.assertIn("是否同时删除 Agents-Notify 的用户配置", script)
         self.assertIn(
             "ExpandConstant('{userappdata}\\Agent-Notify')",
+            script,
+        )
+        self.assertIn(
+            "ExpandConstant('{userappdata}\\Agents-Notify')",
+            script,
+        )
+        self.assertIn('Name: "{app}\\Agent-Notify.exe"', script)
+        self.assertIn(
+            'Name: "{commonprograms}\\Agent-Notify"',
             script,
         )
         self.assertNotIn("BarkPage", script)
@@ -55,9 +65,9 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("`PreToolUse(request_user_input)`", readme)
         self.assertIn("不会写入 `AGENTS.md`", readme)
         self.assertIn("`chatgpt://codex`", readme)
-        self.assertIn(r"C:\Program Files\Agent-Notify", readme)
-        self.assertIn(r"%APPDATA%\Agent-Notify\config.json", readme)
-        self.assertIn("双击 `Agent-Notify.exe`", readme)
+        self.assertIn(r"C:\Program Files\Agents-Notify", readme)
+        self.assertIn(r"%APPDATA%\Agents-Notify\config.json", readme)
+        self.assertIn("双击 `Agents-Notify.exe`", readme)
         self.assertIn("不生成具体线程", readme)
         self.assertIn("/notify bark on|ssh|off|status", readme)
         self.assertIn("/notify feishu on|ssh|off|status", readme)
@@ -81,7 +91,7 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('"config_version": "1.0.2"', config)
         self.assertIn('"url": "chatgpt://codex"', config)
         self.assertIn(
-            "Agent-Notify/master/assets/agent-notify.png", config
+            "Agents-Notify/master/assets/agents-notify.png", config
         )
         self.assertNotIn('"enabled"', config)
         self.assertNotIn("Finb/Bark", config)

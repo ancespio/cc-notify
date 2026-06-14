@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Agent-Notify native Windows settings application."""
+"""Agents-Notify native Windows settings application."""
 
 from dataclasses import dataclass
 from io import BytesIO
@@ -11,12 +11,12 @@ import threading
 
 import wx
 
-from agent_notify.config import (
+from agents_notify.config import (
     DEFAULT_BARK_ICON_URL,
     DEFAULT_BARK_URL,
     load_config,
 )
-from agent_notify.desktop import (
+from agents_notify.desktop import (
     app_data_dir,
     connect_feishu,
     save_provider_settings,
@@ -24,17 +24,17 @@ from agent_notify.desktop import (
     sync_hooks,
     user_home,
 )
-from agent_notify.feishu_control import (
+from agents_notify.feishu_control import (
     LarkCliClient,
     RECOMMENDED_LARK_CLI_VERSION,
 )
-from agent_notify.diagnostics import write_diagnostic
-from agent_notify.icon_validation import (
+from agents_notify.diagnostics import write_diagnostic
+from agents_notify.icon_validation import (
     IconValidationError,
     validate_icon_url,
 )
-from agent_notify.resources import resource_path
-from agent_notify.tray_app import (
+from agents_notify.resources import resource_path
+from agents_notify.tray_app import (
     is_autostart_enabled,
     launch_self,
     restart_tray,
@@ -42,7 +42,7 @@ from agent_notify.tray_app import (
 )
 
 
-APP_NAME = "Agent-Notify"
+APP_NAME = "Agents-Notify"
 DEFAULT_SERVER = "https://api.day.app"
 LEGACY_BARK_ICON_PARTS = (
     "githubusercontent.com/Finb/Bark/",
@@ -60,7 +60,7 @@ def legacy_bark_warnings(url: str, icon: str) -> str:
 
 
 def local_icon_sha256() -> str | None:
-    icon_path = resource_path("assets/agent-notify.png")
+    icon_path = resource_path("assets/agents-notify.png")
     if not icon_path.is_file():
         return None
     return hashlib.sha256(icon_path.read_bytes()).hexdigest()
@@ -257,7 +257,7 @@ def apply_settings(
 def installed_executable() -> Path:
     if getattr(sys, "frozen", False):
         return Path(sys.executable).resolve()
-    return Path(__file__).resolve().parent / "dist" / "Agent-Notify.exe"
+    return Path(__file__).resolve().parent / "dist" / "Agents-Notify.exe"
 
 
 class SettingsFrame(wx.Frame):
@@ -278,7 +278,7 @@ class SettingsFrame(wx.Frame):
         self.config_path = config_path
         self.home = home
         self.executable = executable
-        icon_path = resource_path("assets/agent-notify.png")
+        icon_path = resource_path("assets/agents-notify.png")
         if icon_path.is_file():
             self.SetIcon(wx.Icon(str(icon_path), wx.BITMAP_TYPE_PNG))
         values = load_settings_values(config_path)
@@ -690,7 +690,7 @@ class SettingsFrame(wx.Frame):
             restart_tray(self.executable)
         except Exception as exc:
             write_diagnostic(
-                self.config_path.parent / "agent-notify.log",
+                self.config_path.parent / "agents-notify.log",
                 f"Save settings or restart tray failed: {exc}",
                 secrets=settings_secrets(values),
             )
@@ -854,7 +854,7 @@ class SettingsFrame(wx.Frame):
             launch_self(self.executable, "--onboarding")
         except Exception as exc:
             write_diagnostic(
-                self.config_path.parent / "agent-notify.log",
+                self.config_path.parent / "agents-notify.log",
                 f"Open onboarding failed: {exc}",
             )
             wx.MessageBox(str(exc), APP_NAME, wx.OK | wx.ICON_ERROR)
@@ -904,13 +904,13 @@ class OnboardingFrame(wx.Frame):
         self.executable = executable
         self.page_index = 0
         values = load_settings_values(config_path)
-        icon_path = resource_path("assets/agent-notify.png")
+        icon_path = resource_path("assets/agents-notify.png")
         if icon_path.is_file():
             self.SetIcon(wx.Icon(str(icon_path), wx.BITMAP_TYPE_PNG))
 
         panel = wx.Panel(self)
         outer = wx.BoxSizer(wx.VERTICAL)
-        heading = wx.StaticText(panel, label="Agent-Notify 配置向导")
+        heading = wx.StaticText(panel, label="Agents-Notify 配置向导")
         heading.SetFont(
             wx.Font(
                 18,
@@ -1115,7 +1115,7 @@ class OnboardingFrame(wx.Frame):
         page, sizer = self._page(
             self.book,
             "4. Agent 与程序",
-            "Hook 在保存时安全合并。Agent-Notify 不写入 AGENTS.md，只清理历史标记区块。",
+            "Hook 在保存时安全合并。Agents-Notify 不写入 AGENTS.md，只清理历史标记区块。",
         )
         self.wizard_autostart = wx.CheckBox(
             page, label="登录 Windows 时自动启动托盘"
@@ -1180,7 +1180,7 @@ class OnboardingFrame(wx.Frame):
             restart_tray(self.executable)
         except Exception as exc:
             write_diagnostic(
-                self.config_path.parent / "agent-notify.log",
+                self.config_path.parent / "agents-notify.log",
                 f"Onboarding save or restart tray failed: {exc}",
                 secrets=settings_secrets(values),
             )

@@ -1,12 +1,12 @@
 #!/usr/bin/env python
-"""Install Agent-Notify hooks for Codex and Claude Code."""
+"""Install Agents-Notify hooks for Codex and Claude Code."""
 
 import argparse
 from pathlib import Path
 import sys
 
-from agent_notify.config import VALID_MODES, load_config, update_config
-from agent_notify.installer import (
+from agents_notify.config import VALID_MODES, load_config, update_config
+from agents_notify.installer import (
     install_claude_hooks,
     install_codex_hooks,
     remove_agent_instructions,
@@ -18,7 +18,7 @@ SCRIPT_DIR = Path(__file__).resolve().parent
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Install Agent-Notify for Codex and Claude Code."
+        description="Install Agents-Notify for Codex and Claude Code."
     )
     parser.add_argument("--home", type=Path, default=Path.home())
     parser.add_argument(
@@ -82,7 +82,7 @@ def main() -> int:
         if (codex_dir / "AGENTS.md").exists():
             actions.append(
                 (
-                    "Clean legacy Agent-Notify instructions",
+                    "Clean legacy Agents-Notify instructions",
                     codex_dir / "AGENTS.md",
                 )
             )
@@ -90,10 +90,10 @@ def main() -> int:
         actions.append(
             ("Claude Code hooks", args.home / ".claude" / "settings.json")
         )
-    actions.append(("Agent-Notify config", args.config))
+    actions.append(("Agents-Notify config", args.config))
 
     if args.dry_run:
-        print("Agent-Notify dry run:")
+        print("Agents-Notify dry run:")
         for label, path in actions:
             print(f"- {label}: {path}")
         return 0
@@ -115,7 +115,7 @@ def main() -> int:
         )
     write_config(args.config, args)
 
-    print("Agent-Notify installation complete.")
+    print("Agents-Notify installation complete.")
     print("Restart Codex and Claude Code to load the new hooks.")
     if not load_config(args.config)["providers"]["bark"]["device_key"]:
         print("Bark device key is empty; add it to config.json or rerun with --bark-key.")

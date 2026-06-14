@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from agent_notify.installer import (
+from agents_notify.installer import (
     QUESTION_MARKER_END,
     QUESTION_MARKER_START,
     install_claude_hooks,
@@ -20,7 +20,7 @@ class InstallerTests(unittest.TestCase):
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         self.home = Path(self.temp_dir.name)
-        self.script = self.home / "Agent-Notify" / "notify_hook.py"
+        self.script = self.home / "Agents-Notify" / "notify_hook.py"
 
     def tearDown(self):
         self.temp_dir.cleanup()
@@ -59,7 +59,7 @@ class InstallerTests(unittest.TestCase):
         own = [
             group
             for group in data["hooks"]["Stop"]
-            if "Agent-Notify" in group["hooks"][0].get("statusMessage", "")
+            if "Agents-Notify" in group["hooks"][0].get("statusMessage", "")
         ]
         self.assertEqual(len(own), 1)
 
@@ -96,6 +96,46 @@ class InstallerTests(unittest.TestCase):
         command = data["hooks"]["Stop"][0]["hooks"][0]["command"]
         self.assertNotIn(legacy_name, command)
 
+    def test_legacy_agent_notify_executable_hook_is_replaced(self):
+        path = self.home / ".codex" / "hooks.json"
+        path.parent.mkdir(parents=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "hooks": {
+                        "Stop": [
+                            {
+                                "hooks": [
+                                    {
+                                        "type": "command",
+                                        "command": (
+                                            '"C:/Program Files/Agent-Notify/'
+                                            'Agent-Notify.exe" --hook'
+                                        ),
+                                        "statusMessage": (
+                                            "Agent-Notify: sending Stop alert"
+                                        ),
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                }
+            ),
+            encoding="utf-8",
+        )
+
+        install_codex_executable_hooks(
+            path,
+            Path("C:/Program Files/Agents-Notify/Agents-Notify.exe"),
+        )
+        data = json.loads(path.read_text(encoding="utf-8"))
+
+        self.assertEqual(len(data["hooks"]["Stop"]), 1)
+        command = data["hooks"]["Stop"][0]["hooks"][0]["command"]
+        self.assertIn("Agents-Notify.exe", command)
+        self.assertNotIn("Agent-Notify/Agent-Notify.exe", command)
+
     def test_claude_hook_merge_adds_all_events_without_overwriting(self):
         path = self.home / ".claude" / "settings.json"
         path.parent.mkdir(parents=True)
@@ -127,7 +167,7 @@ class InstallerTests(unittest.TestCase):
     def test_executable_hooks_use_installed_hook_binary(self):
         codex_path = self.home / ".codex" / "hooks.json"
         claude_path = self.home / ".claude" / "settings.json"
-        hook_exe = Path("C:/Program Files/Agent-Notify/Agent-Notify-Hook.exe")
+        hook_exe = Path("C:/Program Files/Agents-Notify/Agents-Notify-Hook.exe")
 
         install_codex_executable_hooks(codex_path, hook_exe)
         install_claude_executable_hooks(claude_path, hook_exe)
@@ -140,7 +180,7 @@ class InstallerTests(unittest.TestCase):
         self.assertEqual(codex_question["matcher"], "^request_user_input$")
         self.assertEqual(
             codex_hook["commandWindows"],
-            '& "C:\\Program Files\\Agent-Notify\\Agent-Notify-Hook.exe" --hook',
+            '& "C:\\Program Files\\Agents-Notify\\Agents-Notify-Hook.exe" --hook',
         )
         self.assertEqual(claude_hook["command"], str(hook_exe))
         self.assertEqual(claude_hook["args"], ["--hook"])
@@ -148,7 +188,7 @@ class InstallerTests(unittest.TestCase):
     def test_remove_hooks_preserves_unrelated_entries(self):
         codex_path = self.home / ".codex" / "hooks.json"
         claude_path = self.home / ".claude" / "settings.json"
-        hook_exe = Path("C:/Program Files/Agent-Notify/Agent-Notify-Hook.exe")
+        hook_exe = Path("C:/Program Files/Agents-Notify/Agents-Notify-Hook.exe")
         codex_path.parent.mkdir(parents=True)
         claude_path.parent.mkdir(parents=True)
         existing = {

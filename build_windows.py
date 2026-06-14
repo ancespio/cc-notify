@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Build Agent-Notify Windows executables with PyInstaller."""
+"""Build Agents-Notify Windows executables with PyInstaller."""
 
 from pathlib import Path
 import shutil
@@ -12,9 +12,9 @@ import PyInstaller.__main__
 ROOT = Path(__file__).resolve().parent
 BUILD_DIR = ROOT / "build"
 DIST_DIR = ROOT / "dist"
-ICON_PATH = BUILD_DIR / "agent-notify.ico"
-SOURCE_ICON_PATH = ROOT / "assets" / "agent-notify.png"
-SOURCE_SVG_PATH = ROOT / "assets" / "agent-notify.svg"
+ICON_PATH = BUILD_DIR / "agents-notify.ico"
+SOURCE_ICON_PATH = ROOT / "assets" / "agents-notify.png"
+SOURCE_SVG_PATH = ROOT / "assets" / "agents-notify.svg"
 RUNTIME_DLLS = (
     "libssl-3-x64.dll",
     "libcrypto-3-x64.dll",
@@ -72,7 +72,7 @@ def build() -> None:
     PyInstaller.__main__.run(
         [
             str(ROOT / "desktop_hook.py"),
-            "--name=Agent-Notify",
+            "--name=Agents-Notify",
             *common,
         ]
     )

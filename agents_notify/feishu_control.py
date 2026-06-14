@@ -191,7 +191,7 @@ class LarkCliClient:
         script = (
             f"{command}; $exitCode = $LASTEXITCODE; "
             "Write-Host ''; "
-            "Write-Host '完成后按 Enter 返回 Agent-Notify。'; "
+            "Write-Host '完成后按 Enter 返回 Agents-Notify。'; "
             "Read-Host | Out-Null; exit $exitCode"
         )
         return [
@@ -223,7 +223,7 @@ class LarkCliClient:
 
     def connect(self, open_id: str) -> str:
         content = json.dumps(
-            {"text": "Agent-Notify 连接成功"},
+            {"text": "Agents-Notify 连接成功"},
             ensure_ascii=False,
         )
         response = self._run(

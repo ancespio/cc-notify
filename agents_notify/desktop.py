@@ -7,6 +7,8 @@ from pathlib import Path
 import shutil
 from typing import Mapping, Optional
 
+from filelock import FileLock
+
 from .config import (
     DEFAULT_AGENT_ICON_URL,
     DEFAULT_BARK_URL,
@@ -36,13 +38,48 @@ def app_data_dir(environ: Optional[Mapping[str, str]] = None) -> Path:
     values = environ or os.environ
     base = values.get("APPDATA")
     if base:
+        return Path(base) / "Agents-Notify"
+    return Path.home() / ".agents-notify"
+
+
+def legacy_app_data_dir(
+    environ: Optional[Mapping[str, str]] = None,
+) -> Path:
+    values = environ or os.environ
+    base = values.get("APPDATA")
+    if base:
         return Path(base) / "Agent-Notify"
     return Path.home() / ".agent-notify"
 
 
+def migrate_legacy_brand_data(
+    data_dir: Path,
+    legacy_data_dir: Path,
+) -> bool:
+    config_path = data_dir / "config.json"
+    legacy_config_path = legacy_data_dir / "config.json"
+    mode_path = data_dir / "mode.json"
+    legacy_mode_path = legacy_data_dir / "mode.json"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    with FileLock(str(data_dir / ".brand-migration.lock")):
+        if config_path.exists() or not legacy_config_path.exists():
+            return False
+        temporary = data_dir / ".config.json.brand-migration.tmp"
+        shutil.copy2(legacy_config_path, temporary)
+        os.replace(temporary, config_path)
+        if legacy_mode_path.exists() and not mode_path.exists():
+            temporary_mode = data_dir / ".mode.json.brand-migration.tmp"
+            shutil.copy2(legacy_mode_path, temporary_mode)
+            os.replace(temporary_mode, mode_path)
+    load_config(config_path, mode_path)
+    return True
+
+
 def user_home(environ: Optional[Mapping[str, str]] = None) -> Path:
     values = environ or os.environ
-    override = values.get("AGENT_NOTIFY_HOME")
+    override = values.get("AGENTS_NOTIFY_HOME") or values.get(
+        "AGENT_NOTIFY_HOME"
+    )
     return Path(override) if override else Path.home()
 
 
@@ -51,7 +88,7 @@ def backup_file(path: Path) -> Optional[Path]:
         return None
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     backup = path.with_name(
-        f"{path.name}.agent-notify-backup-{stamp}"
+        f"{path.name}.agents-notify-backup-{stamp}"
     )
     shutil.copy2(path, backup)
     return backup
@@ -239,7 +276,7 @@ def send_test_notification(config_path: Path) -> bool:
     icon_url = str(bark.get("icon") or "").strip()
     expected_sha256 = None
     if icon_url == DEFAULT_AGENT_ICON_URL:
-        icon_path = resource_path("assets/agent-notify.png")
+        icon_path = resource_path("assets/agents-notify.png")
         if icon_path.is_file():
             import hashlib
 
@@ -262,7 +299,7 @@ def send_test_notification(config_path: Path) -> bool:
             NormalizedEvent(
                 source="codex",
                 kind="stop",
-                workspace="Agent-Notify",
+                workspace="Agents-Notify",
                 summary="Bark 测试通知发送成功。",
             )
         )
@@ -289,7 +326,7 @@ def send_feishu_test_notification(config_path: Path) -> bool:
         NormalizedEvent(
             source="codex",
             kind="stop",
-            workspace="Agent-Notify",
+            workspace="Agents-Notify",
             summary="飞书测试通知发送成功。",
         )
     )

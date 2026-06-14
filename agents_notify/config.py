@@ -15,13 +15,17 @@ from filelock import FileLock
 CONFIG_VERSION = "1.0.2"
 DEFAULT_BARK_URL = "chatgpt://codex"
 DEFAULT_AGENT_ICON_URL = (
-    "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
-    "master/assets/agent-notify.png"
+    "https://raw.githubusercontent.com/ancespio/Agents-Notify/"
+    "master/assets/agents-notify.png"
 )
 DEFAULT_BARK_ICON_URL = DEFAULT_AGENT_ICON_URL
 LEGACY_BARK_URLS = {"", "chatgpt://"}
 LEGACY_AGENT_ICON_URLS = {
     "",
+    (
+        "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
+        "master/assets/agent-notify.png"
+    ),
     (
         "https://raw.githubusercontent.com/ancespio/Agent-Notify/"
         "v1.0.0/assets/agent-notify.png"
@@ -44,7 +48,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "bark": {
             "server": "https://api.day.app",
             "device_key": "",
-            "group": "Agent-Notify",
+            "group": "Agents-Notify",
             "sound": "",
             "level": "active",
             "url": DEFAULT_BARK_URL,
@@ -76,7 +80,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
 def _backup_config(path: Path) -> Path:
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
     backup = path.with_name(
-        f"{path.name}.agent-notify-backup-{stamp}"
+        f"{path.name}.agents-notify-backup-{stamp}"
     )
     shutil.copy2(path, backup)
     return backup
@@ -119,6 +123,9 @@ def _migrate_raw(raw: dict[str, Any]) -> tuple[dict[str, Any], bool]:
         changed = True
     if current_icon in LEGACY_AGENT_ICON_URLS:
         bark["icon"] = DEFAULT_AGENT_ICON_URL
+        changed = True
+    if str(bark.get("group") or "").strip() == "Agent-Notify":
+        bark["group"] = "Agents-Notify"
         changed = True
 
     if migrated.get("open_id") or migrated.get("chat_id"):

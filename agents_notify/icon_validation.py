@@ -73,7 +73,7 @@ def validate_icon_url(
         raise IconValidationError("图标 URL 必须是有效的 HTTP 或 HTTPS 地址。")
     request = Request(
         url.strip(),
-        headers={"User-Agent": "Agent-Notify/1.0.1"},
+        headers={"User-Agent": "Agents-Notify/1.0.1"},
     )
     try:
         with opener(request, timeout=timeout) as response:
@@ -99,6 +99,6 @@ def validate_icon_url(
         and result.sha256.casefold() != expected_sha256.casefold()
     ):
         raise IconValidationError(
-            "远程默认图标与本地 Agent-Notify 图标不一致。"
+            "远程默认图标与本地 Agents-Notify 图标不一致。"
         )
     return result

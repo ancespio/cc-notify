@@ -52,7 +52,7 @@ class BarkProvider:
             "device_key": device_key,
             "title": title,
             "body": body,
-            "group": self.config.get("group") or "Agent-Notify",
+            "group": self.config.get("group") or "Agents-Notify",
         }
         for key in ("sound", "level", "url", "icon"):
             if self.config.get(key):

@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Agent-Notify hook entry point for Codex and Claude Code."""
+"""Agents-Notify hook entry point for Codex and Claude Code."""
 
 import argparse
 import json
@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 import sys
 
-from agent_notify.config import load_config
-from agent_notify.runtime import handle_payload
+from agents_notify.config import load_config
+from agents_notify.runtime import handle_payload
 
 
 PROJECT_DIR = Path(__file__).resolve().parent
@@ -45,12 +45,20 @@ def main() -> int:
         payload = _payload(args)
         config_path = Path(
             os.environ.get(
-                "AGENT_NOTIFY_CONFIG", str(PROJECT_DIR / "config.json")
+                "AGENTS_NOTIFY_CONFIG",
+                os.environ.get(
+                    "AGENT_NOTIFY_CONFIG",
+                    str(PROJECT_DIR / "config.json"),
+                ),
             )
         )
         mode_path = Path(
             os.environ.get(
-                "AGENT_NOTIFY_MODE", str(PROJECT_DIR / "mode.json")
+                "AGENTS_NOTIFY_MODE",
+                os.environ.get(
+                    "AGENT_NOTIFY_MODE",
+                    str(PROJECT_DIR / "mode.json"),
+                ),
             )
         )
         handle_payload(

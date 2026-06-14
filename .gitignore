@@ -2,9 +2,9 @@ __pycache__/
 *.pyc
 mode.json
 config.json
-config.json.agent-notify-backup-*
+config.json.agents-notify-backup-*
 hook_debug.log
-agent-notify.log
+agents-notify.log
 *.log
 pending/
 start_tray.vbs

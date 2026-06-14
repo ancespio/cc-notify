@@ -4,7 +4,7 @@ import unittest
 
 from PIL import Image
 
-from agent_notify.icon_validation import (
+from agents_notify.icon_validation import (
     IconValidationError,
     validate_icon_bytes,
     validate_icon_url,

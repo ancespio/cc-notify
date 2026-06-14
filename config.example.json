@@ -5,11 +5,11 @@
       "mode": "all",
       "server": "https://api.day.app",
       "device_key": "YOUR_BARK_DEVICE_KEY",
-      "group": "Agent-Notify",
+      "group": "Agents-Notify",
       "sound": "",
       "level": "active",
       "url": "chatgpt://codex",
-      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/master/assets/agent-notify.png",
+      "icon": "https://raw.githubusercontent.com/ancespio/Agents-Notify/master/assets/agents-notify.png",
       "timeout": 8
     },
     "feishu": {

@@ -1,6 +1,6 @@
-# Agent-Notify
+# Agents-Notify
 
-Agent-Notify v1.0.2 将 Codex 和 Claude Code 的权限申请、结构化提问与任务
+Agents-Notify v1.0.2 将 Codex 和 Claude Code 的权限申请、结构化提问与任务
 完成事件推送到 Bark 或飞书，并可通过飞书远程切换两种渠道的通知模式。
 
 它不依赖 Codex App 自身的远程通知，因此通知是否送达不受线程新旧或桌面端当前
@@ -8,8 +8,8 @@ Agent-Notify v1.0.2 将 Codex 和 Claude Code 的权限申请、结构化提问�
 
 ## Windows 安装
 
-1. 下载并双击 `Agent-Notify-Setup-v1.0.2.exe`。
-2. 选择安装目录，默认是 `C:\Program Files\Agent-Notify`。
+1. 下载并双击 `Agents-Notify-Setup-v1.0.2.exe`。
+2. 选择安装目录，默认是 `C:\Program Files\Agents-Notify`。
 3. 安装完成后自动打开五步首次配置向导。
 4. 按需配置 Bark、飞书、Agent Hook 与登录自启动；任意渠道均可跳过。
 5. 完成向导后重启已安装 Hook 的 Agent。
@@ -23,14 +23,14 @@ Bark 与飞书都不是必选项，可以将任一渠道设为全部通知、仅
 2. 在 Bark 标签页填写 Key；“显示”开关可反复切换且不会丢失内容。
 3. 选择全部通知、仅 SSH 或关闭。
 4. 点击“校验图标”，确认远程图片可下载、可解码且尺寸合规。
-5. 点击“发送 Bark 测试通知”，检查 iPhone 通知是否使用 Agent-Notify 自有图标。
+5. 点击“发送 Bark 测试通知”，检查 iPhone 通知是否使用 Agents-Notify 自有图标。
 
 如果升级后仍看到 `chatgpt://` 或 Bark 官方图标地址，设置页只显示
 “旧版配置”提示，不会自动覆盖非空配置。点击“恢复新版默认”可主动改为：
 
 ```text
 跳转：chatgpt://codex
-图标：https://raw.githubusercontent.com/ancespio/Agent-Notify/master/assets/agent-notify.png
+图标：https://raw.githubusercontent.com/ancespio/Agents-Notify/master/assets/agents-notify.png
 ```
 
 首次配置飞书：
@@ -51,43 +51,43 @@ Bark 与飞书都不是必选项，可以将任一渠道设为全部通知、仅
 6. 登录成功后点击“自动获取 open_id”，程序执行：
    `lark-cli api GET /open-apis/authen/v1/user_info --as user --format json`
 7. 确认自动填写的 `open_id`，再点击“连接并发送测试消息”。
-8. Agent-Notify 从连接消息响应自动保存只读的 `chat_id`，用户无需自行查找。
+8. Agents-Notify 从连接消息响应自动保存只读的 `chat_id`，用户无需自行查找。
 
-这些交互命令不会静默执行。Agent-Notify 不接触飞书密码或登录令牌；
+这些交互命令不会静默执行。Agents-Notify 不接触飞书密码或登录令牌；
 `open_id` 自动获取失败时，可以运行上述 `user_info` 命令并手动填写返回结果中的
 `open_id`。
 
 安装过程本身不要求填写通知凭据。设置窗口是唯一的配置入口：
 
-- 开始菜单中的“Agent-Notify 设置”
+- 开始菜单中的“Agents-Notify 设置”
 - 托盘菜单中的“打开设置”
-- 双击安装目录中的 `Agent-Notify.exe`
+- 双击安装目录中的 `Agents-Notify.exe`
 
 安装器会安全合并而不是覆盖：
 
 - `~/.codex/hooks.json`
 - `~/.claude/settings.json`
 
-修改已有文件前，Agent-Notify 会在同一目录创建带时间戳的备份。卸载时只移除
-Agent-Notify 添加的 Hook。v1.0.2 起，卸载器会询问是否同时删除用户配置、
+修改已有文件前，Agents-Notify 会在同一目录创建带时间戳的备份。卸载时只移除
+Agents-Notify 添加的 Hook。v1.0.2 起，卸载器会询问是否同时删除用户配置、
 日志和迁移备份，默认选择删除；选择“否”可保留配置供以后重装使用。
 
-Agent-Notify 不会写入 `AGENTS.md`。从早期版本升级时，只会清理带有
-Agent-Notify 标记的旧提问兜底区块，其他用户指令保持不变。
+Agents-Notify 不会写入 `AGENTS.md`。从早期版本升级时，只会清理带有
+Agents-Notify 标记的旧提问兜底区块，其他用户指令保持不变。
 
 ## 安装内容
 
 程序文件安装到用户在安装器中选择的目录：
 
 ```text
-C:\Program Files\Agent-Notify
+C:\Program Files\Agents-Notify
 ```
 
 默认目录内包含：
 
 ```text
-Agent-Notify/
-|-- Agent-Notify.exe
+Agents-Notify/
+|-- Agents-Notify.exe
 |-- README.txt
 |-- LICENSE.txt
 |-- install-home.txt
@@ -97,15 +97,15 @@ Agent-Notify/
 用户配置单独存放在：
 
 ```text
-%APPDATA%\Agent-Notify\config.json
+%APPDATA%\Agents-Notify\config.json
 ```
 
 Bark Key 通过 HTTPS 请求体发送，不会放入请求 URL，也不会写入 Hook 输出。
-飞书功能通过本机已登录的 `lark-cli` 工作，Agent-Notify 不保存飞书密码。
+飞书功能通过本机已登录的 `lark-cli` 工作，Agents-Notify 不保存飞书密码。
 
 ## Windows 托盘
 
-Agent-Notify 以轻量通知区域进程运行。托盘菜单可以：
+Agents-Notify 以轻量通知区域进程运行。托盘菜单可以：
 
 - 分别切换 Bark 与飞书的全部通知、仅 SSH、关闭模式。
 - 发送 Bark 测试通知。
@@ -145,7 +145,7 @@ Bark、飞书各自的模式及飞书遥控状态；飞书命令修改配置后�
 | Codex | 原生 `PermissionRequest` | 原生 `PreToolUse(request_user_input)` | 原生 `Stop` |
 | Claude Code | 原生 `PermissionRequest` | `AskUserQuestion` 的 `PreToolUse` 与 MCP `Elicitation` | 原生 `Stop` |
 
-Codex 将结构化提问暴露为内置 `request_user_input` 工具。Agent-Notify 通过
+Codex 将结构化提问暴露为内置 `request_user_input` 工具。Agents-Notify 通过
 `PreToolUse` 匹配该工具，因此提问通知不依赖模型指令，也不需要修改
 `AGENTS.md`。
 
@@ -176,9 +176,9 @@ chatgpt://codex
       "mode": "all",
       "server": "https://api.day.app",
       "device_key": "YOUR_BARK_DEVICE_KEY",
-      "group": "Agent-Notify",
+      "group": "Agents-Notify",
       "url": "chatgpt://codex",
-      "icon": "https://raw.githubusercontent.com/ancespio/Agent-Notify/master/assets/agent-notify.png",
+      "icon": "https://raw.githubusercontent.com/ancespio/Agents-Notify/master/assets/agents-notify.png",
       "timeout": 8
     },
     "feishu": {
@@ -205,15 +205,23 @@ chatgpt://codex
 `mode` 可取 `all`、`ssh-only`、`off`。设置窗口支持自建 Bark 服务和自定义
 通知图标 URL。设置页会限制图标下载大小和超时，仅接受可解码的 PNG、JPEG 或
 WebP，并检查图片尺寸。默认远程图标还必须与安装包内
-`agent-notify.png` 的 SHA-256 一致。Hook 运行时不会重复联网预检，以免阻塞
+`agents-notify.png` 的 SHA-256 一致。Hook 运行时不会重复联网预检，以免阻塞
 Agent；只有手动校验和 Bark 测试通知会执行完整校验。
 
-Windows 程序、托盘、安装器和 Bark 通知默认使用 Agent-Notify 自有图标：
+Windows 程序、托盘、安装器和 Bark 通知默认使用 Agents-Notify 自有图标：
 浅色底、深色通知铃、白色终端符号与珊瑚色提醒点。
 
 ## 升级迁移
 
-- 沿用 `%APPDATA%\Agent-Notify\config.json`，保留已有 Bark Key 和 Hook 选择。
+- 从旧版 `Agent-Notify` 升级时，首次运行会将
+  `%APPDATA%\Agent-Notify\config.json` 复制到新的
+  `%APPDATA%\Agents-Notify\config.json`。
+- Bark Key、飞书身份、通知模式、遥控状态和 Agent Hook 选择保持不变；旧目录
+  留作回退副本，不再作为运行时配置源。
+- 旧官方图标地址、Hook 可执行文件路径和登录自启动项会更新为
+  `Agents-Notify`；自定义图标地址保持不变。
+- 沿用原 Inno Setup AppId，因此覆盖升级可以继续使用旧物理安装目录；全新安装
+  默认使用 `C:\Program Files\Agents-Notify`。
 - v1.0.2 加载含旧字段或旧默认值的配置时会创建时间戳备份；迁移可重复执行且
   不会重复修改已完成迁移的配置。
 - 旧 `enabled=false` 会迁移为 `mode=off`；`enabled=true` 会保留有效模式，
@@ -224,7 +232,7 @@ Windows 程序、托盘、安装器和 Bark 通知默认使用 Agent-Notify 自�
 - 旧版顶层 `open_id`、`chat_id` 会迁移到飞书 provider。
 - 旧 `mode.json` 会在首次运行时迁移为 Bark 与飞书各自的模式。
 - 迁移后所有运行状态均写入 `config.json`。
-- Agent-Notify 不会新增 `AGENTS.md` 内容，只清理旧版标记区块。
+- Agents-Notify 不会新增 `AGENTS.md` 内容，只清理新旧品牌的历史标记区块。
 
 ## Codex 测试
 
@@ -252,13 +260,13 @@ Windows 程序、托盘、安装器和 Bark 通知默认使用 Agent-Notify 自�
 ```powershell
 python -m unittest discover -s tests -v
 python build_windows.py
-iscc installer\Agent-Notify.iss
+iscc installer\Agents-Notify.iss
 ```
 
 最终安装包生成在：
 
 ```text
-dist-installer\Agent-Notify-Setup-v1.0.2.exe
+dist-installer\Agents-Notify-Setup-v1.0.2.exe
 ```
 
 ## 常见问题
@@ -269,7 +277,7 @@ dist-installer\Agent-Notify-Setup-v1.0.2.exe
   64 到 4096 像素之间。
 - 没有 Bark 通知：检查 Key 是否正确，以及模式是否为关闭。
 - 托盘 Bark 测试失败：托盘会显示简短原因，完整脱敏日志位于
-  `%APPDATA%\Agent-Notify\agent-notify.log`。
+  `%APPDATA%\Agents-Notify\agents-notify.log`。
 - `lark-cli` 未就绪：依次执行安装、初始化、登录，并用
   `lark-cli auth status` 检查。
 - 无法自动获取 `open_id`：运行 README 中的 `user_info` 命令，将返回值里的
@@ -278,15 +286,15 @@ dist-installer\Agent-Notify-Setup-v1.0.2.exe
 - 没有飞书通知：确认 `lark-cli` 已登录、`open_id` 正确并完成连接测试。
 - 飞书命令无响应：确认远程控制开关已开启，且消息来自配置的用户私聊。
 - 修改 Hook 后无效果：重启 Codex 或 Claude Code；Codex 还需在 `/hooks`
-  中信任 Agent-Notify Hook。
-- 托盘没有出现：双击 `Agent-Notify.exe` 保存设置，或重新登录 Windows。
+  中信任 Agents-Notify Hook。
+- 托盘没有出现：双击 `Agents-Notify.exe` 保存设置，或重新登录 Windows。
 
 ## 远程批准限制
 
-Bark 不提供自定义“允许”和“拒绝”通知按钮，因此 Agent-Notify v1.0.2 只负责通知，
+Bark 不提供自定义“允许”和“拒绝”通知按钮，因此 Agents-Notify v1.0.2 只负责通知，
 批准操作仍需在 Codex 或 Claude Code 中完成。Apple Watch 是否镜像 Bark
 通知取决于 iPhone 与 Apple Watch 的通知设置。
 
 ## 许可证
 
-Agent-Notify 使用 MIT License，详见 `LICENSE`。
+Agents-Notify 使用 MIT License，详见 `LICENSE`。

@@ -14,7 +14,7 @@ from build_windows import (
 
 
 class BuildWindowsTests(unittest.TestCase):
-    def test_build_uses_agent_notify_source_icon(self):
+    def test_build_uses_agents_notify_source_icon(self):
         self.assertTrue(SOURCE_ICON_PATH.is_file())
         self.assertTrue(SOURCE_SVG_PATH.is_file())
         svg = SOURCE_SVG_PATH.read_text(encoding="utf-8")

@@ -5,8 +5,10 @@ from pathlib import Path
 from typing import Any
 
 
-QUESTION_MARKER_START = "<!-- agent-notify:question-hook:start -->"
-QUESTION_MARKER_END = "<!-- agent-notify:question-hook:end -->"
+QUESTION_MARKER_START = "<!-- agents-notify:question-hook:start -->"
+QUESTION_MARKER_END = "<!-- agents-notify:question-hook:end -->"
+LEGACY_QUESTION_MARKER_START = "<!-- agent-notify:question-hook:start -->"
+LEGACY_QUESTION_MARKER_END = "<!-- agent-notify:question-hook:end -->"
 LEGACY_PROJECT_FRAGMENT = "cc" + "-notify"
 
 
@@ -39,17 +41,21 @@ def _windows_command(command: str) -> str:
     return f"& {command}"
 
 
-def _is_agent_notify_group(group: Any) -> bool:
+def _is_agents_notify_group(group: Any) -> bool:
     if not isinstance(group, dict):
         return False
     for hook in group.get("hooks", []):
         if not isinstance(hook, dict):
             continue
-        if str(hook.get("statusMessage", "")).startswith("Agent-Notify"):
+        if str(hook.get("statusMessage", "")).startswith(
+            ("Agents-Notify", "Agent-Notify")
+        ):
             return True
         command = str(hook.get("command", "")).replace("\\", "/").lower()
         if "notify_hook.py" in command and (
-            LEGACY_PROJECT_FRAGMENT in command or "agent-notify" in command
+            LEGACY_PROJECT_FRAGMENT in command
+            or "agents-notify" in command
+            or "agent-notify" in command
         ):
             return True
     return False
@@ -59,7 +65,7 @@ def _merge_group(
     groups: Any, new_group: dict[str, Any]
 ) -> list[dict[str, Any]]:
     existing = groups if isinstance(groups, list) else []
-    kept = [group for group in existing if not _is_agent_notify_group(group)]
+    kept = [group for group in existing if not _is_agents_notify_group(group)]
     kept.append(new_group)
     return kept
 
@@ -75,7 +81,7 @@ def _codex_group(
                 "command": command,
                 "commandWindows": _windows_command(command),
                 "timeout": 15,
-                "statusMessage": f"Agent-Notify: sending {event_name} alert",
+                "statusMessage": f"Agents-Notify: sending {event_name} alert",
             }
         ]
     }
@@ -97,7 +103,7 @@ def _codex_executable_group(
                 "command": command,
                 "commandWindows": _windows_command(command),
                 "timeout": 15,
-                "statusMessage": f"Agent-Notify: sending {event_name} alert",
+                "statusMessage": f"Agents-Notify: sending {event_name} alert",
             }
         ]
     }
@@ -118,7 +124,7 @@ def _claude_group(
                 "command": python_executable,
                 "args": [str(script_path)],
                 "timeout": 15,
-                "statusMessage": f"Agent-Notify: sending {event_name} alert",
+                "statusMessage": f"Agents-Notify: sending {event_name} alert",
             }
         ]
     }
@@ -139,7 +145,7 @@ def _claude_executable_group(
                 "command": str(hook_executable),
                 "args": ["--hook"],
                 "timeout": 15,
-                "statusMessage": f"Agent-Notify: sending {event_name} alert",
+                "statusMessage": f"Agents-Notify: sending {event_name} alert",
             }
         ]
     }
@@ -218,11 +224,15 @@ def _replace_instruction_block(path: Path, block: str | None) -> None:
     except FileNotFoundError:
         current = ""
 
-    start = current.find(QUESTION_MARKER_START)
-    end = current.find(QUESTION_MARKER_END)
-    if start >= 0 and end >= start:
-        end += len(QUESTION_MARKER_END)
-        current = current[:start].rstrip() + current[end:]
+    for start_marker, end_marker in (
+        (QUESTION_MARKER_START, QUESTION_MARKER_END),
+        (LEGACY_QUESTION_MARKER_START, LEGACY_QUESTION_MARKER_END),
+    ):
+        start = current.find(start_marker)
+        end = current.find(end_marker)
+        if start >= 0 and end >= start:
+            end += len(end_marker)
+            current = current[:start].rstrip() + current[end:]
 
     updated = current.rstrip()
     if block:
@@ -235,7 +245,7 @@ def _replace_instruction_block(path: Path, block: str | None) -> None:
     path.write_text(updated, encoding="utf-8")
 
 
-def _remove_agent_notify_groups(data: dict[str, Any]) -> None:
+def _remove_agents_notify_groups(data: dict[str, Any]) -> None:
     hooks = data.get("hooks")
     if not isinstance(hooks, dict):
         return
@@ -243,7 +253,7 @@ def _remove_agent_notify_groups(data: dict[str, Any]) -> None:
         groups = hooks.get(event_name)
         if not isinstance(groups, list):
             continue
-        kept = [group for group in groups if not _is_agent_notify_group(group)]
+        kept = [group for group in groups if not _is_agents_notify_group(group)]
         if kept:
             hooks[event_name] = kept
         else:
@@ -254,13 +264,13 @@ def _remove_agent_notify_groups(data: dict[str, Any]) -> None:
 
 def remove_codex_hooks(path: Path) -> None:
     data = _read_json(path)
-    _remove_agent_notify_groups(data)
+    _remove_agents_notify_groups(data)
     _write_json(path, data)
 
 
 def remove_claude_hooks(path: Path) -> None:
     data = _read_json(path)
-    _remove_agent_notify_groups(data)
+    _remove_agents_notify_groups(data)
     _write_json(path, data)
 
 

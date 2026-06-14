@@ -3,16 +3,18 @@ import os
 import tempfile
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 
-from agent_notify.config import load_config
-from agent_notify.tray_app import (
+from agents_notify.config import load_config
+from agents_notify.tray_app import (
+    LEGACY_RUN_VALUE_NAME,
     RUN_VALUE_NAME,
     _make_icon,
     autostart_command,
     build_feishu_controller,
     feishu_control_missing_fields,
     is_autostart_enabled,
+    migrate_legacy_autostart,
     notification_status_text,
     restart_tray,
     set_feishu_control,
@@ -38,12 +40,12 @@ class TrayAppTests(unittest.TestCase):
 
     def test_autostart_command_quotes_executable(self):
         command = autostart_command(
-            Path("C:/Program Files/Agent-Notify/Agent-Notify.exe")
+            Path("C:/Program Files/Agents-Notify/Agents-Notify.exe")
         )
 
         self.assertEqual(
             command,
-            '"C:\\Program Files\\Agent-Notify\\Agent-Notify.exe" --tray',
+            '"C:\\Program Files\\Agents-Notify\\Agents-Notify.exe" --tray',
         )
 
     def test_set_autostart_writes_and_removes_run_value(self):
@@ -52,7 +54,7 @@ class TrayAppTests(unittest.TestCase):
         registry.REG_SZ = 1
         key = registry.CreateKey.return_value.__enter__.return_value
         executable = Path(
-            "C:/Program Files/Agent-Notify/Agent-Notify.exe"
+            "C:/Program Files/Agents-Notify/Agents-Notify.exe"
         )
 
         set_autostart(True, executable, registry)
@@ -62,11 +64,45 @@ class TrayAppTests(unittest.TestCase):
             key, RUN_VALUE_NAME, 0, registry.REG_SZ,
             autostart_command(executable),
         )
-        registry.DeleteValue.assert_called_once_with(key, RUN_VALUE_NAME)
+        self.assertEqual(
+            registry.DeleteValue.call_args_list,
+            [
+                call(key, LEGACY_RUN_VALUE_NAME),
+                call(key, RUN_VALUE_NAME),
+                call(key, LEGACY_RUN_VALUE_NAME),
+            ],
+        )
+
+    def test_migrate_legacy_autostart_replaces_old_run_value(self):
+        registry = MagicMock()
+        registry.HKEY_CURRENT_USER = object()
+        registry.REG_SZ = 1
+        old_key = registry.OpenKey.return_value.__enter__.return_value
+        new_key = registry.CreateKey.return_value.__enter__.return_value
+        executable = Path(
+            "C:/Program Files/Agents-Notify/Agents-Notify.exe"
+        )
+        registry.QueryValueEx.return_value = (
+            '"C:\\Program Files\\Agent-Notify\\Agent-Notify.exe" --tray',
+            1,
+        )
+
+        self.assertTrue(migrate_legacy_autostart(executable, registry))
+
+        registry.QueryValueEx.assert_called_once_with(
+            old_key, LEGACY_RUN_VALUE_NAME
+        )
+        registry.SetValueEx.assert_called_once_with(
+            new_key,
+            RUN_VALUE_NAME,
+            0,
+            registry.REG_SZ,
+            autostart_command(executable),
+        )
 
     def test_settings_command_starts_same_executable_without_arguments(self):
         executable = Path(
-            "C:/Program Files/Agent-Notify/Agent-Notify.exe"
+            "C:/Program Files/Agents-Notify/Agents-Notify.exe"
         )
 
         self.assertEqual(settings_command(executable), [str(executable)])
@@ -86,7 +122,7 @@ class TrayAppTests(unittest.TestCase):
         registry.HKEY_CURRENT_USER = object()
         key = registry.OpenKey.return_value.__enter__.return_value
         executable = Path(
-            "C:/Program Files/Agent-Notify/Agent-Notify.exe"
+            "C:/Program Files/Agents-Notify/Agents-Notify.exe"
         )
         registry.QueryValueEx.return_value = (
             autostart_command(executable),
@@ -126,7 +162,7 @@ class TrayAppTests(unittest.TestCase):
 
         self.assertEqual(
             text,
-            "Agent-Notify | Bark：全部通知 | 飞书：仅 SSH | 遥控：开启",
+            "Agents-Notify | Bark：全部通知 | 飞书：仅 SSH | 遥控：开启",
         )
 
     def test_feishu_control_missing_fields_reports_prerequisites(self):
@@ -206,7 +242,7 @@ class TrayAppTests(unittest.TestCase):
         self.assertEqual(controller.client.executable, "custom-lark")
 
     def test_restart_tray_stops_then_launches_current_executable(self):
-        executable = Path("C:/Program Files/Agent-Notify/Agent-Notify.exe")
+        executable = Path("C:/Program Files/Agents-Notify/Agents-Notify.exe")
         launcher = MagicMock()
         states = iter((True, True, False))
         sleeper = MagicMock()
@@ -232,7 +268,7 @@ class TrayAppTests(unittest.TestCase):
 
         with self.assertRaisesRegex(TimeoutError, "托盘"):
             restart_tray(
-                Path("C:/Agent-Notify.exe"),
+                Path("C:/Agents-Notify.exe"),
                 stop_signal=lambda: True,
                 launcher=launcher,
                 sleeper=lambda _seconds: None,

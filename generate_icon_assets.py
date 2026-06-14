@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Generate deterministic Agent-Notify PNG and ICO assets."""
+"""Generate deterministic Agents-Notify PNG and ICO assets."""
 
 from pathlib import Path
 
@@ -7,8 +7,8 @@ from PIL import Image, ImageDraw
 
 
 ROOT = Path(__file__).resolve().parent
-PNG_PATH = ROOT / "assets" / "agent-notify.png"
-ICO_PATH = ROOT / "build" / "agent-notify.ico"
+PNG_PATH = ROOT / "assets" / "agents-notify.png"
+ICO_PATH = ROOT / "build" / "agents-notify.ico"
 SIZE = 1024
 
 

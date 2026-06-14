@@ -1,5 +1,5 @@
 #!/usr/bin/env python
-"""Frozen Hook entry point for Agent-Notify."""
+"""Frozen Hook entry point for Agents-Notify."""
 
 import argparse
 import json
@@ -7,17 +7,21 @@ import os
 from pathlib import Path
 import sys
 
-from agent_notify.config import load_config
-from agent_notify.desktop import (
+from agents_notify.config import load_config
+from agents_notify.desktop import (
     apply_install_request,
     app_data_dir,
+    legacy_app_data_dir,
+    migrate_legacy_brand_data,
     remove_hooks,
     send_test_notification,
+    sync_hooks,
     user_home,
 )
-from agent_notify.runtime import handle_payload
-from agent_notify.tray_app import (
+from agents_notify.runtime import handle_payload
+from agents_notify.tray_app import (
     run_tray,
+    migrate_legacy_autostart,
     set_autostart,
     signal_tray_stop,
 )
@@ -104,11 +108,6 @@ def read_payload(args: argparse.Namespace) -> dict:
 
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
-    home = Path(args.home) if args.home else user_home()
-    data_dir = app_data_dir()
-    config_path = Path(args.config) if args.config else data_dir / "config.json"
-    executable = Path(sys.executable).resolve()
-
     if args.smoke_test:
         return 0
     if args.settings_smoke_test:
@@ -118,6 +117,27 @@ def main(argv: list[str] | None = None) -> int:
         )
     if args.onboarding_smoke_test:
         return run_settings_app(smoke_test=True, onboarding=True)
+
+    home = Path(args.home) if args.home else user_home()
+    data_dir = app_data_dir()
+    migrated_brand = False
+    if bool(getattr(sys, "frozen", False)):
+        migrated_brand = migrate_legacy_brand_data(
+            data_dir, legacy_app_data_dir()
+        )
+    config_path = Path(args.config) if args.config else data_dir / "config.json"
+    executable = Path(sys.executable).resolve()
+    if migrated_brand:
+        config = load_config(config_path)
+        sync_hooks(
+            home,
+            executable,
+            codex=bool(config["agents"].get("codex")),
+            claude=bool(config["agents"].get("claude")),
+        )
+        if sys.platform == "win32":
+            migrate_legacy_autostart(executable)
+
     if args.onboarding:
         return run_settings_app(smoke_test=False, onboarding=True)
     if should_open_settings(args):
@@ -170,12 +190,16 @@ def main(argv: list[str] | None = None) -> int:
         payload = read_payload(args)
         config_path = Path(
             os.environ.get(
-                "AGENT_NOTIFY_CONFIG", str(config_path)
+                "AGENTS_NOTIFY_CONFIG",
+                os.environ.get("AGENT_NOTIFY_CONFIG", str(config_path)),
             )
         )
         mode_path = Path(
             os.environ.get(
-                "AGENT_NOTIFY_MODE", str(data_dir / "mode.json")
+                "AGENTS_NOTIFY_MODE",
+                os.environ.get(
+                    "AGENT_NOTIFY_MODE", str(data_dir / "mode.json")
+                ),
             )
         )
         handle_payload(

@@ -2,9 +2,9 @@ import json
 import unittest
 from unittest.mock import patch
 
-from agent_notify.config import DEFAULT_BARK_ICON_URL
-from agent_notify.events import NormalizedEvent
-from agent_notify.providers import (
+from agents_notify.config import DEFAULT_BARK_ICON_URL
+from agents_notify.events import NormalizedEvent
+from agents_notify.providers import (
     BarkProvider,
     BarkServiceError,
     FeishuProvider,
@@ -34,14 +34,14 @@ class FakeResponse:
 
 
 class BarkProviderTests(unittest.TestCase):
-    @patch("agent_notify.providers.urlopen", return_value=FakeResponse())
+    @patch("agents_notify.providers.urlopen", return_value=FakeResponse())
     def test_bark_posts_json_without_key_in_url(self, urlopen_mock):
         provider = BarkProvider(
             {
                 "mode": "off",
                 "server": "https://api.day.app",
                 "device_key": "secret-key",
-                "group": "Agent-Notify",
+                "group": "Agents-Notify",
                 "url": "chatgpt://",
                 "icon": DEFAULT_BARK_ICON_URL,
             }
@@ -53,7 +53,7 @@ class BarkProviderTests(unittest.TestCase):
 
         self.assertEqual(request.full_url, "https://api.day.app/push")
         self.assertEqual(payload["device_key"], "secret-key")
-        self.assertEqual(payload["group"], "Agent-Notify")
+        self.assertEqual(payload["group"], "Agents-Notify")
         self.assertEqual(payload["url"], "chatgpt://")
         self.assertEqual(payload["icon"], DEFAULT_BARK_ICON_URL)
         self.assertIn("Codex", payload["title"])
@@ -61,7 +61,7 @@ class BarkProviderTests(unittest.TestCase):
     def test_bark_missing_key_is_skipped(self):
         self.assertFalse(BarkProvider({"mode": "all"}).send(sample_event()))
 
-    @patch("agent_notify.providers.urlopen")
+    @patch("agents_notify.providers.urlopen")
     def test_bark_error_response_preserves_service_message(self, urlopen):
         response = FakeResponse()
         response.read = lambda: json.dumps(
@@ -82,7 +82,7 @@ class BarkProviderTests(unittest.TestCase):
 
 
 class FeishuProviderTests(unittest.TestCase):
-    @patch("agent_notify.providers.subprocess.run")
+    @patch("agents_notify.providers.subprocess.run")
     def test_feishu_uses_argument_list(self, run_mock):
         run_mock.return_value.returncode = 0
         provider = FeishuProvider(
