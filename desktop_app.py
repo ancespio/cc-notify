@@ -75,6 +75,7 @@ def expected_icon_sha256(url: str) -> str | None:
 def settings_secrets(values: "SettingsValues") -> tuple[str, ...]:
     return (
         values.device_key,
+        values.feishu_app_secret,
         values.open_id,
         values.chat_id,
     )
@@ -169,6 +170,8 @@ class SettingsValues:
     lark_cli: str
     codex: bool
     claude: bool
+    feishu_app_id: str = ""
+    feishu_app_secret: str = ""
 
 
 def load_settings_values(config_path: Path) -> SettingsValues:
@@ -191,6 +194,8 @@ def load_settings_values(config_path: Path) -> SettingsValues:
         lark_cli=str(feishu.get("lark_cli") or default_lark_cli()),
         codex=bool(agents.get("codex", True)),
         claude=bool(agents.get("claude", True)),
+        feishu_app_id=str(feishu.get("app_id") or ""),
+        feishu_app_secret=str(feishu.get("app_secret") or ""),
     )
 
 
@@ -209,13 +214,20 @@ def default_lark_cli() -> str:
 def validate_settings(values: SettingsValues) -> None:
     if values.bark_mode != "off" and not values.device_key.strip():
         raise ValueError("启用 Bark 通知时请填写 Bark Key。")
-    if values.feishu_mode != "off" or values.feishu_control_enabled:
+    if values.feishu_mode != "off":
         if not values.open_id.strip():
             raise ValueError("启用飞书功能时请填写 open_id。")
         if not values.lark_cli.strip():
             raise ValueError("启用飞书功能时请填写 lark-cli 路径。")
-    if values.feishu_control_enabled and not values.chat_id.strip():
-        raise ValueError("启用飞书遥控时请先连接并生成 chat_id。")
+    if values.feishu_control_enabled:
+        if not values.feishu_app_id.strip():
+            raise ValueError("启用飞书遥控时请填写 App ID。")
+        if not values.feishu_app_secret.strip():
+            raise ValueError("启用飞书遥控时请填写 App Secret。")
+        if not values.open_id.strip():
+            raise ValueError("启用飞书遥控时请填写 open_id。")
+        if not values.chat_id.strip():
+            raise ValueError("启用飞书遥控时请先连接并生成 chat_id。")
 
 
 def apply_settings(
@@ -237,6 +249,8 @@ def apply_settings(
         feishu={
             "control_enabled": values.feishu_control_enabled,
             "mode": values.feishu_mode,
+            "app_id": values.feishu_app_id,
+            "app_secret": values.feishu_app_secret,
             "open_id": values.open_id,
             "chat_id": values.chat_id,
             "lark_cli": values.lark_cli,
@@ -402,6 +416,24 @@ class SettingsFrame(wx.Frame):
         )
         self._add_row(
             feishu_form, feishu_panel, "通知模式", self.feishu_mode
+        )
+        self.feishu_app_id_ctrl = wx.TextCtrl(
+            feishu_panel, value=values.feishu_app_id
+        )
+        self._add_row(
+            feishu_form,
+            feishu_panel,
+            "飞书 App ID",
+            self.feishu_app_id_ctrl,
+        )
+        self.feishu_app_secret_ctrl = SecretField(
+            feishu_panel, value=values.feishu_app_secret
+        )
+        self._add_row(
+            feishu_form,
+            feishu_panel,
+            "飞书 App Secret",
+            self.feishu_app_secret_ctrl,
         )
         self.lark_cli_ctrl = wx.TextCtrl(
             feishu_panel, value=values.lark_cli
@@ -664,6 +696,8 @@ class SettingsFrame(wx.Frame):
             lark_cli=self.lark_cli_ctrl.GetValue(),
             codex=self.codex_check.IsChecked(),
             claude=self.claude_check.IsChecked(),
+            feishu_app_id=self.feishu_app_id_ctrl.GetValue(),
+            feishu_app_secret=self.feishu_app_secret_ctrl.GetValue(),
         )
 
     def _save(self) -> list[Path]:
@@ -1074,6 +1108,12 @@ class OnboardingFrame(wx.Frame):
             "3. 配置飞书",
             "安装和登录会在可见 PowerShell 中完成。登录后可自动获取 open_id，连接消息会自动建立 chat_id。",
         )
+        self.wizard_app_id = wx.TextCtrl(
+            page, value=values.feishu_app_id
+        )
+        self.wizard_app_secret = SecretField(
+            page, value=values.feishu_app_secret
+        )
         self.wizard_lark_cli = wx.TextCtrl(
             page, value=values.lark_cli
         )
@@ -1081,6 +1121,8 @@ class OnboardingFrame(wx.Frame):
         self.wizard_chat_id = wx.TextCtrl(
             page, value=values.chat_id, style=wx.TE_READONLY
         )
+        self._row(page, sizer, "飞书 App ID", self.wizard_app_id)
+        self._row(page, sizer, "飞书 App Secret", self.wizard_app_secret)
         self._row(page, sizer, "lark-cli 路径", self.wizard_lark_cli)
         self._row(page, sizer, "open_id", self.wizard_open_id)
         self._row(page, sizer, "chat_id", self.wizard_chat_id)
@@ -1208,6 +1250,8 @@ class OnboardingFrame(wx.Frame):
             lark_cli=self.wizard_lark_cli.GetValue(),
             codex=self.wizard_codex.IsChecked(),
             claude=self.wizard_claude.IsChecked(),
+            feishu_app_id=self.wizard_app_id.GetValue(),
+            feishu_app_secret=self.wizard_app_secret.GetValue(),
         )
 
     def _update_summary(self) -> None:
@@ -1276,6 +1320,8 @@ class OnboardingFrame(wx.Frame):
             feishu={
                 "control_enabled": values.feishu_control_enabled,
                 "mode": values.feishu_mode,
+                "app_id": values.feishu_app_id,
+                "app_secret": values.feishu_app_secret,
                 "open_id": values.open_id,
                 "chat_id": values.chat_id,
                 "lark_cli": values.lark_cli,

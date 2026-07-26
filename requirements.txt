@@ -1,0 +1,8 @@
+filelock>=3.12
+Pillow>=10.0
+pystray>=0.19
+wxPython>=4.2
+lark-oapi>=1.7,<2
+
+# Windows 构建工具按需安装，不是运行时 Hook 必需依赖：
+# pyinstaller>=6.14

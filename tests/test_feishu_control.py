@@ -238,3 +238,28 @@ class FeishuControllerTests(unittest.TestCase):
         self.controller.process_messages([message], initial=False)
 
         self.client.reply.assert_called_once()
+
+    def test_run_consumes_websocket_events_without_history_polling(self):
+        controller = self.controller
+
+        class FakeWebSocketClient:
+            def __init__(self):
+                self.replies = []
+
+            def run(self, on_message, stop_event):
+                on_message(
+                    FeishuControllerTests.message(message_id="m-ws")
+                )
+                stop_event.set()
+
+            def reply(self, message_id, text):
+                self.replies.append((message_id, text))
+
+        client = FakeWebSocketClient()
+        controller.client = client
+
+        controller.run()
+
+        config = load_config(self.config_path)
+        self.assertEqual(config["providers"]["bark"]["mode"], "off")
+        self.assertEqual(len(client.replies), 1)

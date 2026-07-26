@@ -89,6 +89,25 @@ def run_settings_app(
     )
 
 
+def runtime_smoke_test() -> int:
+    import charset_normalizer
+    import lark_oapi
+    import lark_oapi.ws.client
+    import requests
+    from lark_oapi.api.im.v1 import (
+        ReplyMessageRequest,
+        ReplyMessageRequestBody,
+    )
+
+    _ = (
+        charset_normalizer.__version__,
+        requests.__version__,
+        ReplyMessageRequest,
+        ReplyMessageRequestBody,
+    )
+    return 0
+
+
 def read_payload(args: argparse.Namespace) -> dict:
     if args.question is not None:
         return {
@@ -109,7 +128,7 @@ def read_payload(args: argparse.Namespace) -> dict:
 def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     if args.smoke_test:
-        return 0
+        return runtime_smoke_test()
     if args.settings_smoke_test:
         return run_settings_app(
             smoke_test=True,

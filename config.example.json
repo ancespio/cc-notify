@@ -1,5 +1,5 @@
 {
-  "config_version": "1.0.2",
+  "config_version": "1.0.3",
   "providers": {
     "bark": {
       "mode": "all",
@@ -15,6 +15,8 @@
     "feishu": {
       "control_enabled": false,
       "mode": "off",
+      "app_id": "",
+      "app_secret": "",
       "open_id": "",
       "chat_id": "",
       "lark_cli": "",

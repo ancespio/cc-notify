@@ -14,3 +14,15 @@ dist-debug/
 dist-installer/
 tools/
 work/
+
+# 本机 Agent 指令与文件规划记录
+AGENTS.md
+task_plan.md
+findings.md
+progress.md
+TMP/
+
+# 已废弃的本地 Bark 图标参考素材
+assets/BARK-ICON-SOURCE.md
+assets/BARK-LICENSE.txt
+assets/bark.png

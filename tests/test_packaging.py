@@ -13,14 +13,16 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("config.json.agents-notify-backup-*", ignore)
         self.assertIn("agents-notify.log", ignore)
         self.assertIn("*.log", ignore)
+        self.assertIn("AGENTS.md", ignore)
+        self.assertIn("task_plan.md", ignore)
 
     def test_installer_starts_tray_and_manages_autostart(self):
         script = (ROOT / "installer" / "Agents-Notify.iss").read_text(
             encoding="utf-8"
         )
 
-        self.assertIn('#define AppVersion "1.0.2"', script)
-        self.assertIn("Agents-Notify-Setup-v1.0.2", script)
+        self.assertIn('#define AppVersion "1.0.3"', script)
+        self.assertIn("Agents-Notify-Setup-v1.0.3", script)
         self.assertIn("SetupIconFile=..\\build\\agents-notify.ico", script)
         self.assertIn("UsePreviousGroup=no", script)
         self.assertIn("[Icons]", script)
@@ -72,9 +74,14 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("/notify bark on|ssh|off|status", readme)
         self.assertIn("/notify feishu on|ssh|off|status", readme)
         self.assertIn("lark-cli", readme)
-        self.assertIn("v1.0.2", readme)
+        self.assertIn("v1.0.3", readme)
         self.assertIn("auth login --recommend", readme)
         self.assertIn("自动获取", readme)
+        self.assertIn("飞书 App ID", readme)
+        self.assertIn("飞书 App Secret", readme)
+        self.assertIn("im:message.p2p_msg:readonly", readme)
+        self.assertIn("im:message:send_as_bot", readme)
+        self.assertIn("im.message.receive_v1", readme)
         self.assertNotIn("Global `AGENTS.md` fallback", readme)
 
     def test_pyinstaller_build_is_windowed_and_bundles_custom_icon(self):
@@ -83,12 +90,14 @@ class PackagingTests(unittest.TestCase):
         self.assertIn('"--windowed"', script)
         self.assertNotIn('"--console"', script)
         self.assertIn("--add-data=", script)
+        self.assertIn("--hidden-import=lark_oapi.ws.client", script)
+        self.assertIn("--hidden-import=lark_oapi.api.im.v1", script)
         self.assertIn("SOURCE_ICON_PATH", script)
 
     def test_example_config_uses_app_link_and_custom_icon(self):
         config = (ROOT / "config.example.json").read_text(encoding="utf-8")
 
-        self.assertIn('"config_version": "1.0.2"', config)
+        self.assertIn('"config_version": "1.0.3"', config)
         self.assertIn('"url": "chatgpt://codex"', config)
         self.assertIn(
             "Agents-Notify/master/assets/agents-notify.png", config

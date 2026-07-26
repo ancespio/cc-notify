@@ -81,6 +81,8 @@ class DesktopAppServiceTests(unittest.TestCase):
                                 "enabled": False,
                                 "control_enabled": True,
                                 "mode": "off",
+                                "app_id": "cli_app",
+                                "app_secret": "secret_app",
                                 "open_id": "ou_owner",
                                 "chat_id": "oc_private",
                                 "lark_cli": "lark-cli",
@@ -109,6 +111,8 @@ class DesktopAppServiceTests(unittest.TestCase):
         self.assertEqual(values.open_id, "ou_owner")
         self.assertEqual(values.chat_id, "oc_private")
         self.assertEqual(values.lark_cli, "lark-cli")
+        self.assertEqual(values.feishu_app_id, "cli_app")
+        self.assertEqual(values.feishu_app_secret, "secret_app")
 
     def test_apply_settings_saves_config_and_syncs_hook_selection(self):
         with tempfile.TemporaryDirectory() as temp_dir:
@@ -124,6 +128,8 @@ class DesktopAppServiceTests(unittest.TestCase):
                 bark_mode="off",
                 feishu_control_enabled=True,
                 feishu_mode="off",
+                feishu_app_id="cli_app",
+                feishu_app_secret="secret_app",
                 open_id="ou_owner",
                 chat_id="oc_private",
                 lark_cli="lark-cli",
@@ -149,6 +155,9 @@ class DesktopAppServiceTests(unittest.TestCase):
             )
             self.assertTrue(
                 saved["providers"]["feishu"]["control_enabled"]
+            )
+            self.assertEqual(
+                saved["providers"]["feishu"]["app_id"], "cli_app"
             )
             self.assertFalse(saved["agents"]["codex"])
             self.assertTrue(saved["agents"]["claude"])
@@ -184,6 +193,8 @@ class DesktopAppServiceTests(unittest.TestCase):
             bark_mode="off",
             feishu_control_enabled=True,
             feishu_mode="off",
+            feishu_app_id="",
+            feishu_app_secret="",
             open_id="",
             chat_id="",
             lark_cli="",
@@ -191,13 +202,16 @@ class DesktopAppServiceTests(unittest.TestCase):
             claude=True,
         )
 
-        with self.assertRaisesRegex(ValueError, "open_id"):
+        with self.assertRaisesRegex(ValueError, "App ID"):
             validate_settings(values)
 
         values.open_id = "ou_owner"
-        with self.assertRaisesRegex(ValueError, "lark-cli"):
+        with self.assertRaisesRegex(ValueError, "App ID"):
             validate_settings(values)
-        values.lark_cli = "lark-cli"
+        values.feishu_app_id = "cli_app"
+        with self.assertRaisesRegex(ValueError, "App Secret"):
+            validate_settings(values)
+        values.feishu_app_secret = "secret_app"
         with self.assertRaisesRegex(ValueError, "chat_id"):
             validate_settings(values)
 
@@ -210,6 +224,8 @@ class DesktopAppServiceTests(unittest.TestCase):
             bark_mode="off",
             feishu_control_enabled=False,
             feishu_mode="off",
+            feishu_app_id="",
+            feishu_app_secret="",
             open_id="",
             chat_id="",
             lark_cli="",

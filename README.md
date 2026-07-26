@@ -1,18 +1,27 @@
 # Agents-Notify
 
-Agents-Notify v1.0.2 将 Codex 和 Claude Code 的权限申请、结构化提问与任务
+Agents-Notify v1.0.3 将 Codex 和 Claude Code 的权限申请、结构化提问与任务
 完成事件推送到 Bark 或飞书，并可通过飞书远程切换两种渠道的通知模式。
 
 它不依赖 Codex App 自身的远程通知，因此通知是否送达不受线程新旧或桌面端当前
 是否打开该对话影响。
 
+重建说明见 [`docs/REBUILD.md`](docs/REBUILD.md)，待改进项见
+[`docs/IMPROVEMENTS.md`](docs/IMPROVEMENTS.md)。
+
 ## Windows 安装
 
-1. 下载并双击 `Agents-Notify-Setup-v1.0.2.exe`。
+1. 下载并双击 `Agents-Notify-Setup-v1.0.3.exe`。
 2. 选择安装目录，默认是 `C:\Program Files\Agents-Notify`。
 3. 安装完成后自动打开五步首次配置向导。
 4. 按需配置 Bark、飞书、Agent Hook 与登录自启动；任意渠道均可跳过。
 5. 完成向导后重启已安装 Hook 的 Agent。
+
+官方下载：
+[Agents-Notify v1.0.3](https://github.com/ancespio/Agents-Notify/releases/tag/v1.0.3)
+
+安装包 SHA-256：
+`D0BC7ABDAA79573EF026A8A45DD2DFF52B67D3BEFE584B4CBD6DC3695FF59C82`
 
 Bark 与飞书都不是必选项，可以将任一渠道设为全部通知、仅 SSH 或关闭，也可以
 在两种通知均关闭时只启用飞书远程控制。
@@ -33,29 +42,65 @@ Bark 与飞书都不是必选项，可以将任一渠道设为全部通知、仅
 图标：https://raw.githubusercontent.com/ancespio/Agents-Notify/master/assets/agents-notify.png
 ```
 
-首次配置飞书：
+### 获取并填写飞书 App ID/App Secret
 
-飞书配置使用 [lark-cli 官方流程](https://github.com/larksuite/cli)。
-设置页和首次向导提供对应的分步按钮，命令会在可见 PowerShell 窗口中运行：
+飞书远程控制使用的是企业自建的“应用机器人”，不是群聊中只有 Webhook 的
+“自定义机器人”。如果你已经通过 `lark-cli config init` 创建了应用，可以直接
+复用该应用，不必再创建第二个机器人。
 
-1. 点击“1. 安装”，对应：
-   `npx @larksuite/cli@latest install`
-2. 点击“2. 初始化”，对应：
-   `lark-cli config init`
-3. 点击“3. 登录”，对应：
-   `lark-cli auth login --recommend`
-4. 点击“4. 重新检测”，程序执行：
-   `lark-cli auth status`
-5. 如果版本低于 1.0.53，点击“更新 CLI”，在可见 PowerShell 中执行
-   `lark-cli update`。
-6. 登录成功后点击“自动获取 open_id”，程序执行：
-   `lark-cli api GET /open-apis/authen/v1/user_info --as user --format json`
-7. 确认自动填写的 `open_id`，再点击“连接并发送测试消息”。
-8. Agents-Notify 从连接消息响应自动保存只读的 `chat_id`，用户无需自行查找。
+1. 打开[飞书开发者后台](https://open.feishu.cn/app)，创建或进入一个企业自建应用。
+2. 在“应用能力 > 添加应用能力”中添加“机器人”。
+3. 在“权限管理 > API 权限”中以应用身份开通：
+   - `im:message.p2p_msg:readonly`：读取用户发给机器人的单聊消息；
+   - `im:message:send_as_bot`：以应用的身份发消息。
+4. 进入“凭证与基础信息 > 应用凭证”，复制 App ID 和 App Secret。
+5. 打开 Agents-Notify 设置页的“飞书”标签，将两项分别写入“飞书 App ID”和
+   “飞书 App Secret”。App Secret 会以密码框显示。
 
-这些交互命令不会静默执行。Agents-Notify 不接触飞书密码或登录令牌；
-`open_id` 自动获取失败时，可以运行上述 `user_info` 命令并手动填写返回结果中的
-`open_id`。
+推荐始终通过设置页写入。需要手动编辑时，先退出托盘进程，再编辑：
+
+```text
+%APPDATA%\Agents-Notify\config.json
+```
+
+对应字段为：
+
+```json
+{
+  "providers": {
+    "feishu": {
+      "app_id": "cli_xxx",
+      "app_secret": "YOUR_APP_SECRET"
+    }
+  }
+}
+```
+
+App Secret 等同应用密码。当前版本将它明文保存在本机配置文件中，请勿把该文件
+上传、提交或发给他人；如果在飞书后台重置 App Secret，也必须同步更新本机配置。
+
+### 连接飞书机器人
+
+飞书通知仍通过 [lark-cli 官方流程](https://github.com/larksuite/cli)发送；请确保
+lark-cli 当前 Profile 与上面填写的 App ID 属于同一个应用。设置页和首次向导提供
+对应的分步按钮，命令会在可见 PowerShell 窗口中运行：
+
+1. 点击“1. 安装”，对应 `npx @larksuite/cli@latest install`。
+2. 点击“2. 初始化”，对应 `lark-cli config init`。
+3. 点击“3. 登录”，对应 `lark-cli auth login --recommend`。
+4. 点击“4. 重新检测”，程序执行 `lark-cli auth status`；版本过低时先点击
+   “更新 CLI”。
+5. 登录成功后点击“自动获取 open_id”。自动获取失败时，可手动运行：
+   `lark-cli api GET /open-apis/authen/v1/user_info --as user --format json`。
+6. 点击“连接并发送测试消息”；Agents-Notify 会从响应中保存只读的 `chat_id`。
+7. 填写 App ID/App Secret，开启“飞书远程控制”，保存设置并保持托盘进程运行。
+8. 回到飞书开发者后台的“事件与回调 > 事件配置”，选择“使用长连接接收事件”，
+   添加 `im.message.receive_v1`。飞书要求保存订阅方式时已有长连接在线。
+9. 在“版本管理与发布”中创建并发布新版本，使机器人能力、权限和事件配置生效。
+10. 在飞书中私聊该机器人并发送 `/notify status`；收到状态回复即表示连接完成。
+
+同一个 App ID 不要同时启动多个独立的长连接消费者；飞书会把每个事件随机交给
+其中一个客户端，而不是向所有客户端广播。
 
 安装过程本身不要求填写通知凭据。设置窗口是唯一的配置入口：
 
@@ -73,7 +118,8 @@ Agents-Notify 添加的 Hook。v1.0.2 起，卸载器会询问是否同时删除
 日志和迁移备份，默认选择删除；选择“否”可保留配置供以后重装使用。
 
 Agents-Notify 不会写入 `AGENTS.md`。从早期版本升级时，只会清理带有
-Agents-Notify 标记的旧提问兜底区块，其他用户指令保持不变。
+`Agents-Notify` 或旧 `Agent-Notify` 标记的提问兜底区块，其他用户指令
+保持不变。
 
 ## 安装内容
 
@@ -101,7 +147,8 @@ Agents-Notify/
 ```
 
 Bark Key 通过 HTTPS 请求体发送，不会放入请求 URL，也不会写入 Hook 输出。
-飞书功能通过本机已登录的 `lark-cli` 工作，Agents-Notify 不保存飞书密码。
+飞书遥控通过官方 `lark-oapi` 长连接接收消息，需要配置企业自建应用的 App ID、
+App Secret、open_id 和 chat_id；飞书通知测试与主动通知暂保留本机 `lark-cli`。
 
 ## Windows 托盘
 
@@ -122,7 +169,7 @@ Bark、飞书各自的模式及飞书遥控状态；飞书命令修改配置后�
 ## 飞书远程控制
 
 飞书通知与飞书远程控制是两个独立开关。即使飞书通知模式设为关闭，远程控制
-仍会继续轮询，因此可以从飞书恢复通知。
+仍会保持 WebSocket 长连接，因此可以从飞书恢复通知；它不再轮询消息历史。
 
 ```text
 /notify on|ssh|off
@@ -135,8 +182,9 @@ Bark、飞书各自的模式及飞书遥控状态；飞书命令修改配置后�
 模式本身就是通知开关，不再有单独的“启用渠道”配置。飞书远程控制始终独立，
 不会被 `off` 关闭。`/notify status` 会回复两个渠道的模式和远程控制状态。
 
-控制器只接受配置的 `open_id` 在已发现私聊中的命令。启动时只记录已有消息，
-不会重放历史 `/notify` 命令；重复消息也只处理一次。
+控制器只接受配置的 `open_id` 在配置私聊中的命令。WebSocket 只接收启动后的
+新事件，不会重放历史 `/notify` 命令；重复事件也只处理一次。需要在飞书开放
+平台订阅 `im.message.receive_v1` 并发布应用。
 
 ## 支持的事件
 
@@ -170,7 +218,7 @@ chatgpt://codex
 
 ```json
 {
-  "config_version": "1.0.2",
+  "config_version": "1.0.3",
   "providers": {
     "bark": {
       "mode": "all",
@@ -184,6 +232,8 @@ chatgpt://codex
     "feishu": {
       "control_enabled": false,
       "mode": "off",
+      "app_id": "",
+      "app_secret": "",
       "open_id": "",
       "chat_id": "",
       "lark_cli": "",
@@ -266,7 +316,7 @@ iscc installer\Agents-Notify.iss
 最终安装包生成在：
 
 ```text
-dist-installer\Agents-Notify-Setup-v1.0.2.exe
+dist-installer\Agents-Notify-Setup-v1.0.3.exe
 ```
 
 ## 常见问题
@@ -291,8 +341,10 @@ dist-installer\Agents-Notify-Setup-v1.0.2.exe
 
 ## 远程批准限制
 
-Bark 不提供自定义“允许”和“拒绝”通知按钮，因此 Agents-Notify v1.0.2 只负责通知，
-批准操作仍需在 Codex 或 Claude Code 中完成。Apple Watch 是否镜像 Bark
+Bark 不提供自定义“允许”和“拒绝”通知按钮，因此 Agents-Notify v1.0.3 只负责通知，
+批准操作仍需在 Codex 或 Claude Code 中完成。Codex 官方的 `PermissionRequest` Hook
+目前只适合观测和播报；官方 `codex app-server` 另有实验性的双向 JSON-RPC 审批协议，
+但 Agents-Notify 当前尚未接入该协议。Apple Watch 是否镜像 Bark
 通知取决于 iPhone 与 Apple Watch 的通知设置。
 
 ## 许可证

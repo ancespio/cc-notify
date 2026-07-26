@@ -218,10 +218,12 @@ class DesktopHookCliTests(unittest.TestCase):
             smoke_test=True, onboarding=True
         )
 
-    def test_command_smoke_test_returns_success(self):
+    @patch("desktop_hook.runtime_smoke_test", return_value=0)
+    def test_command_smoke_test_returns_success(self, smoke_test_mock):
         result = desktop_hook.main(["--smoke-test"])
 
         self.assertEqual(result, 0)
+        smoke_test_mock.assert_called_once_with()
 
     def test_install_failure_returns_nonzero(self):
         result = subprocess.run(

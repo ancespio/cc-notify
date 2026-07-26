@@ -168,19 +168,23 @@ class TrayAppTests(unittest.TestCase):
     def test_feishu_control_missing_fields_reports_prerequisites(self):
         missing = feishu_control_missing_fields(
             {
+                "app_id": "",
+                "app_secret": "",
                 "lark_cli": "",
                 "open_id": "",
                 "chat_id": "",
             }
         )
 
-        self.assertEqual(missing, ("lark-cli", "open_id", "chat_id"))
+        self.assertEqual(
+            missing, ("app_id", "app_secret", "open_id", "chat_id")
+        )
 
     def test_set_feishu_control_rejects_incomplete_configuration(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "config.json"
 
-            with self.assertRaisesRegex(ValueError, "open_id"):
+            with self.assertRaisesRegex(ValueError, "app_id"):
                 set_feishu_control(path, True)
 
             config = load_config(path)
@@ -197,6 +201,8 @@ class TrayAppTests(unittest.TestCase):
                     {
                         "providers": {
                             "feishu": {
+                                "app_id": "cli_app",
+                                "app_secret": "secret_app",
                                 "lark_cli": "lark-cli",
                                 "open_id": "ou_owner",
                                 "chat_id": "oc_private",
@@ -226,9 +232,11 @@ class TrayAppTests(unittest.TestCase):
                 json.dumps(
                     {
                         "providers": {
-                            "feishu": {
-                                "control_enabled": True,
-                                "lark_cli": "custom-lark",
+                        "feishu": {
+                            "control_enabled": True,
+                            "app_id": "cli_app",
+                            "app_secret": "secret_app",
+                            "lark_cli": "custom-lark",
                             }
                         }
                     }
@@ -239,7 +247,8 @@ class TrayAppTests(unittest.TestCase):
             controller = build_feishu_controller(path)
 
         self.assertIsNotNone(controller)
-        self.assertEqual(controller.client.executable, "custom-lark")
+        self.assertEqual(controller.client.app_id, "cli_app")
+        self.assertEqual(controller.client.app_secret, "secret_app")
 
     def test_restart_tray_stops_then_launches_current_executable(self):
         executable = Path("C:/Program Files/Agents-Notify/Agents-Notify.exe")

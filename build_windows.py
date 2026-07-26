@@ -61,13 +61,18 @@ def build() -> None:
         "--onefile",
         "--noupx",
         "--windowed",
+        "--hidden-import=lark_oapi.ws.client",
+        "--hidden-import=lark_oapi.api.im.v1",
         f"--icon={ICON_PATH}",
         f"--add-data={SOURCE_ICON_PATH};assets",
         f"--distpath={DIST_DIR}",
         f"--workpath={BUILD_DIR / 'pyinstaller'}",
         f"--specpath={BUILD_DIR}",
     ]
-    for binary in collect_runtime_binaries(Path(sys.prefix)):
+    runtime_binaries = []
+    for prefix in dict.fromkeys((Path(sys.prefix), Path(sys.base_prefix))):
+        runtime_binaries.extend(collect_runtime_binaries(prefix))
+    for binary in dict.fromkeys(runtime_binaries):
         common.append(f"--add-binary={binary}")
     PyInstaller.__main__.run(
         [

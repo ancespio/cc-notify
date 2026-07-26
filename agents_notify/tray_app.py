@@ -19,8 +19,9 @@ from .desktop import (
     send_test_notification,
 )
 from .diagnostics import write_diagnostic
-from .feishu_control import FeishuController, LarkCliClient
+from .feishu_control import FeishuController
 from .feishu_control import MODE_LABELS
+from .feishu_service import FeishuWebSocketService
 from .resources import resource_path
 
 
@@ -202,7 +203,8 @@ def feishu_control_missing_fields(
     settings: Mapping[str, Any],
 ) -> tuple[str, ...]:
     fields = (
-        ("lark-cli", settings.get("lark_cli")),
+        ("app_id", settings.get("app_id")),
+        ("app_secret", settings.get("app_secret")),
         ("open_id", settings.get("open_id")),
         ("chat_id", settings.get("chat_id")),
     )
@@ -233,16 +235,6 @@ def _notifications_enabled(config_path: Path) -> bool:
     )
 
 
-def _default_lark_cli() -> str:
-    if sys.platform == "win32":
-        return str(
-            Path(os.environ.get("APPDATA", ""))
-            / "npm"
-            / "lark-cli.cmd"
-        )
-    return "lark-cli"
-
-
 def build_feishu_controller(
     config_path: Path,
     on_config_changed=None,
@@ -250,9 +242,9 @@ def build_feishu_controller(
     settings = load_config(config_path)["providers"]["feishu"]
     if not settings.get("control_enabled"):
         return None
-    client = LarkCliClient(
-        str(settings.get("lark_cli") or _default_lark_cli()),
-        float(settings.get("timeout", 10)),
+    client = FeishuWebSocketService(
+        str(settings.get("app_id") or ""),
+        str(settings.get("app_secret") or ""),
     )
     return FeishuController(
         config_path,

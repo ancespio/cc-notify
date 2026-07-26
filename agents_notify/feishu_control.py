@@ -1,8 +1,9 @@
-"""Feishu remote notification-mode control through lark-cli."""
+"""Feishu remote notification-mode command handling."""
 
 from dataclasses import dataclass
 import json
 from pathlib import Path
+import queue
 import re
 import subprocess
 import sys
@@ -241,26 +242,6 @@ class LarkCliClient:
         )
         return str(response.get("data", {}).get("chat_id") or "")
 
-    def fetch_messages(self, chat_id: str) -> list[dict[str, Any]]:
-        params = json.dumps(
-            {
-                "container_id_type": "chat",
-                "container_id": chat_id,
-                "page_size": 20,
-                "sort_type": "ByCreateTimeDesc",
-            }
-        )
-        response = self._run(
-            "api",
-            "GET",
-            "/open-apis/im/v1/messages",
-            "--params",
-            params,
-            "--as",
-            "bot",
-        )
-        return list(response.get("data", {}).get("items", []))
-
     def reply(self, message_id: str, text: str) -> None:
         content = json.dumps({"text": text}, ensure_ascii=False)
         self._run(
@@ -333,21 +314,30 @@ class FeishuController:
                 pass
 
     def run(self) -> None:
-        initialized = False
-        delay = 1.0
-        while not self.stop_event.is_set():
-            config = load_config(self.config_path)
-            settings = config["providers"]["feishu"]
-            if not settings.get("control_enabled"):
-                return
-            chat_id = str(settings.get("chat_id") or "")
-            if not chat_id:
-                return
-            try:
-                messages = self.client.fetch_messages(chat_id)
-                self.process_messages(messages, initial=not initialized)
-                initialized = True
-                delay = 1.0
-            except Exception:
-                delay = min(delay * 2, 15.0)
-            self.stop_event.wait(delay)
+        config = load_config(self.config_path)
+        settings = config["providers"]["feishu"]
+        if not settings.get("control_enabled"):
+            return
+
+        messages: queue.Queue[dict[str, Any] | None] = queue.Queue()
+
+        def process_queue() -> None:
+            while True:
+                message = messages.get()
+                if message is None:
+                    return
+                try:
+                    self.process_messages([message])
+                except Exception:
+                    pass
+
+        worker = threading.Thread(target=process_queue, daemon=True)
+        worker.start()
+        try:
+            self.client.run(messages.put, self.stop_event)
+        except Exception:
+            if not self.stop_event.is_set():
+                raise
+        finally:
+            messages.put(None)
+            worker.join(timeout=5)

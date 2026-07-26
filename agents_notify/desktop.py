@@ -151,6 +151,10 @@ def save_provider_settings(
                     feishu.get("control_enabled")
                 ),
                 "mode": str(feishu.get("mode") or "all"),
+                "app_id": str(feishu.get("app_id") or "").strip(),
+                "app_secret": str(
+                    feishu.get("app_secret") or ""
+                ).strip(),
                 "open_id": str(feishu.get("open_id") or "").strip(),
                 "chat_id": str(feishu.get("chat_id") or "").strip(),
                 "lark_cli": str(feishu.get("lark_cli") or "").strip(),

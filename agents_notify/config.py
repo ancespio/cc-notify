@@ -12,7 +12,7 @@ from typing import Any
 from filelock import FileLock
 
 
-CONFIG_VERSION = "1.0.2"
+CONFIG_VERSION = "1.0.3"
 DEFAULT_BARK_URL = "chatgpt://codex"
 DEFAULT_AGENT_ICON_URL = (
     "https://raw.githubusercontent.com/ancespio/Agents-Notify/"
@@ -59,6 +59,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
         "feishu": {
             "control_enabled": False,
             "mode": "off",
+            "app_id": "",
+            "app_secret": "",
             "open_id": "",
             "chat_id": "",
             "lark_cli": "",
