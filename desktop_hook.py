@@ -95,6 +95,8 @@ def runtime_smoke_test() -> int:
     import lark_oapi.ws.client
     import requests
     from lark_oapi.api.im.v1 import (
+        CreateMessageRequest,
+        CreateMessageRequestBody,
         ReplyMessageRequest,
         ReplyMessageRequestBody,
     )
@@ -102,6 +104,8 @@ def runtime_smoke_test() -> int:
     _ = (
         charset_normalizer.__version__,
         requests.__version__,
+        CreateMessageRequest,
+        CreateMessageRequestBody,
         ReplyMessageRequest,
         ReplyMessageRequestBody,
     )

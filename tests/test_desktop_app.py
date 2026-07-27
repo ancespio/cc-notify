@@ -110,7 +110,6 @@ class DesktopAppServiceTests(unittest.TestCase):
         self.assertEqual(values.feishu_mode, "off")
         self.assertEqual(values.open_id, "ou_owner")
         self.assertEqual(values.chat_id, "oc_private")
-        self.assertEqual(values.lark_cli, "lark-cli")
         self.assertEqual(values.feishu_app_id, "cli_app")
         self.assertEqual(values.feishu_app_secret, "secret_app")
 
@@ -132,7 +131,6 @@ class DesktopAppServiceTests(unittest.TestCase):
                 feishu_app_secret="secret_app",
                 open_id="ou_owner",
                 chat_id="oc_private",
-                lark_cli="lark-cli",
                 codex=False,
                 claude=True,
             )
@@ -176,7 +174,6 @@ class DesktopAppServiceTests(unittest.TestCase):
             feishu_mode="off",
             open_id="",
             chat_id="",
-            lark_cli="",
             codex=True,
             claude=True,
         )
@@ -184,7 +181,7 @@ class DesktopAppServiceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "Bark Key"):
             validate_settings(values)
 
-    def test_feishu_features_require_open_id_and_cli(self):
+    def test_feishu_features_require_api_credentials_and_ids(self):
         values = SettingsValues(
             device_key="",
             server="https://api.day.app",
@@ -197,7 +194,6 @@ class DesktopAppServiceTests(unittest.TestCase):
             feishu_app_secret="",
             open_id="",
             chat_id="",
-            lark_cli="",
             codex=True,
             claude=True,
         )
@@ -228,7 +224,6 @@ class DesktopAppServiceTests(unittest.TestCase):
             feishu_app_secret="",
             open_id="",
             chat_id="",
-            lark_cli="",
             codex=True,
             claude=True,
         )

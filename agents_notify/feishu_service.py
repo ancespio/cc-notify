@@ -6,30 +6,127 @@ import threading
 from typing import Any, Callable
 
 
-class FeishuWebSocketService:
+class FeishuApiClient:
+    """Call Feishu message OpenAPI with an app identity."""
+
+    def __init__(
+        self,
+        app_id: str,
+        app_secret: str,
+        timeout: float = 10,
+    ):
+        self.app_id = str(app_id or "").strip()
+        self.app_secret = str(app_secret or "").strip()
+        self.timeout = float(timeout)
+        self._api_client: Any = None
+
+    def _load_sdk(self) -> Any:
+        if not self.app_id or not self.app_secret:
+            raise ValueError("飞书 API 需要配置 App ID 和 App Secret。")
+        try:
+            import lark_oapi as lark
+        except ImportError as exc:
+            raise RuntimeError(
+                "未安装 lark-oapi，请先安装 requirements.txt 中的依赖。"
+            ) from exc
+        return lark
+
+    def _client(self) -> Any:
+        lark = self._load_sdk()
+        if self._api_client is None:
+            self._api_client = (
+                lark.Client.builder()
+                .app_id(self.app_id)
+                .app_secret(self.app_secret)
+                .timeout(self.timeout)
+                .build()
+            )
+        return self._api_client
+
+    def send_text(
+        self,
+        receive_id: str,
+        text: str,
+        receive_id_type: str = "open_id",
+    ) -> str:
+        """Send a text message and return the resulting chat ID."""
+        client = self._client()
+        from lark_oapi.api.im.v1 import (
+            CreateMessageRequest,
+            CreateMessageRequestBody,
+        )
+
+        value = str(receive_id or "").strip()
+        if not value:
+            raise ValueError("飞书消息接收方不能为空。")
+        request = CreateMessageRequest.builder().receive_id_type(
+            receive_id_type
+        ).request_body(
+            CreateMessageRequestBody.builder()
+            .receive_id(value)
+            .msg_type("text")
+            .content(
+                json.dumps({"text": str(text)}, ensure_ascii=False)
+            )
+            .build()
+        ).build()
+        response = client.im.v1.message.create(request)
+        if not response.success():
+            raise OSError(
+                f"飞书消息发送失败：{response.code} {response.msg}"
+            )
+        return str(getattr(response.data, "chat_id", "") or "")
+
+    def connect(self, open_id: str) -> str:
+        """Send the setup message used to discover and persist chat_id."""
+        return self.send_text(open_id, "Agents-Notify 连接成功")
+
+    def reply(self, message_id: str, text: str) -> None:
+        """Reply to a received message through Feishu OpenAPI."""
+        client = self._client()
+        from lark_oapi.api.im.v1 import (
+            ReplyMessageRequest,
+            ReplyMessageRequestBody,
+        )
+
+        request = ReplyMessageRequest.builder().message_id(
+            message_id
+        ).request_body(
+            ReplyMessageRequestBody.builder()
+            .msg_type("text")
+            .content(
+                json.dumps({"text": text}, ensure_ascii=False)
+            )
+            .build()
+        ).build()
+        response = client.im.v1.message.reply(request)
+        if not response.success():
+            raise OSError(
+                f"飞书回复失败：{response.code} {response.msg}"
+            )
+
+
+class FeishuWebSocketService(FeishuApiClient):
     """Receive Feishu message events without polling message history."""
 
     def __init__(
         self,
         app_id: str,
         app_secret: str,
+        timeout: float = 10,
     ):
-        self.app_id = str(app_id or "").strip()
-        self.app_secret = str(app_secret or "").strip()
+        super().__init__(app_id, app_secret, timeout=timeout)
         self._ws_client: Any = None
         self._ws_module: Any = None
-        self._api_client: Any = None
         self._stop_requested = False
 
-    def _load_sdk(self) -> Any:
-        if not self.app_id or not self.app_secret:
-            raise ValueError("飞书 WebSocket 需要配置 app_id 和 app_secret。")
+    def _load_ws_sdk(self) -> Any:
+        lark = self._load_sdk()
         try:
-            import lark_oapi as lark
             import lark_oapi.ws.client as ws_module
         except ImportError as exc:
             raise RuntimeError(
-                "未安装 lark-oapi，请先安装 requirements.txt 中的依赖。"
+                "未安装 lark-oapi WebSocket 组件，请先安装 requirements.txt 中的依赖。"
             ) from exc
         self._ws_module = ws_module
         return lark
@@ -59,7 +156,7 @@ class FeishuWebSocketService:
         stop_event: threading.Event,
     ) -> None:
         """Block while the SDK receives events and stop on ``stop_event``."""
-        lark = self._load_sdk()
+        lark = self._load_ws_sdk()
         self._stop_requested = False
 
         def handle_message(data: Any) -> None:
@@ -119,35 +216,3 @@ class FeishuWebSocketService:
         loop.call_soon_threadsafe(
             lambda: asyncio.ensure_future(close_connection(), loop=loop)
         )
-
-    def reply(self, message_id: str, text: str) -> None:
-        """Reply to a received message through Feishu OpenAPI."""
-        lark = self._load_sdk()
-        from lark_oapi.api.im.v1 import (
-            ReplyMessageRequest,
-            ReplyMessageRequestBody,
-        )
-
-        if self._api_client is None:
-            self._api_client = (
-                lark.Client.builder()
-                .app_id(self.app_id)
-                .app_secret(self.app_secret)
-                .build()
-            )
-        client = self._api_client
-        request = ReplyMessageRequest.builder().message_id(
-            message_id
-        ).request_body(
-            ReplyMessageRequestBody.builder()
-            .msg_type("text")
-            .content(
-                json.dumps({"text": text}, ensure_ascii=False)
-            )
-            .build()
-        ).build()
-        response = client.im.v1.message.reply(request)
-        if not response.success():
-            raise OSError(
-                f"飞书回复失败：{response.code} {response.msg}"
-            )

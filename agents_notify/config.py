@@ -12,7 +12,7 @@ from typing import Any
 from filelock import FileLock
 
 
-CONFIG_VERSION = "1.0.3"
+CONFIG_VERSION = "1.0.4"
 DEFAULT_BARK_URL = "chatgpt://codex"
 DEFAULT_AGENT_ICON_URL = (
     "https://raw.githubusercontent.com/ancespio/Agents-Notify/"
@@ -63,7 +63,6 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "app_secret": "",
             "open_id": "",
             "chat_id": "",
-            "lark_cli": "",
             "timeout": 10,
         },
     },
@@ -106,6 +105,9 @@ def _migrate_raw(raw: dict[str, Any]) -> tuple[dict[str, Any], bool]:
     if not isinstance(feishu, dict):
         feishu = {}
         providers["feishu"] = feishu
+        changed = True
+    if "lark_cli" in feishu:
+        feishu.pop("lark_cli", None)
         changed = True
 
     for name, settings in (("bark", bark), ("feishu", feishu)):

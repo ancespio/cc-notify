@@ -21,8 +21,8 @@ class PackagingTests(unittest.TestCase):
             encoding="utf-8"
         )
 
-        self.assertIn('#define AppVersion "1.0.3"', script)
-        self.assertIn("Agents-Notify-Setup-v1.0.3", script)
+        self.assertIn('#define AppVersion "1.0.4"', script)
+        self.assertIn("Agents-Notify-Setup-v1.0.4", script)
         self.assertIn("SetupIconFile=..\\build\\agents-notify.ico", script)
         self.assertIn("UsePreviousGroup=no", script)
         self.assertIn("[Icons]", script)
@@ -58,6 +58,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("DEFAULT_BARK_URL", script)
         self.assertIn("wx.ScrolledWindow", script)
         self.assertIn("wx.RadioButton", script)
+        self.assertIn("发送测试消息并生成 chat_id", script)
+        self.assertNotIn("lark_cli_ctrl", script)
         self.assertNotIn('label="启用 Bark 通知"', script)
         self.assertNotIn('label="启用飞书通知"', script)
 
@@ -73,10 +75,8 @@ class PackagingTests(unittest.TestCase):
         self.assertIn("不生成具体线程", readme)
         self.assertIn("/notify bark on|ssh|off|status", readme)
         self.assertIn("/notify feishu on|ssh|off|status", readme)
-        self.assertIn("lark-cli", readme)
-        self.assertIn("v1.0.3", readme)
-        self.assertIn("auth login --recommend", readme)
-        self.assertIn("自动获取", readme)
+        self.assertIn("lark-oapi", readme)
+        self.assertIn("v1.0.4", readme)
         self.assertIn("飞书 App ID", readme)
         self.assertIn("飞书 App Secret", readme)
         self.assertIn("im:message.p2p_msg:readonly", readme)
@@ -97,12 +97,13 @@ class PackagingTests(unittest.TestCase):
     def test_example_config_uses_app_link_and_custom_icon(self):
         config = (ROOT / "config.example.json").read_text(encoding="utf-8")
 
-        self.assertIn('"config_version": "1.0.3"', config)
+        self.assertIn('"config_version": "1.0.4"', config)
         self.assertIn('"url": "chatgpt://codex"', config)
         self.assertIn(
             "Agents-Notify/master/assets/agents-notify.png", config
         )
         self.assertNotIn('"enabled"', config)
+        self.assertNotIn('"lark_cli"', config)
         self.assertNotIn("Finb/Bark", config)
         self.assertIn('"agents"', config)
 

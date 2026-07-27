@@ -1,5 +1,5 @@
 #define AppName "Agents-Notify"
-#define AppVersion "1.0.3"
+#define AppVersion "1.0.4"
 #define Publisher "ancespio"
 
 [Setup]
@@ -12,7 +12,7 @@ DefaultGroupName=Agents-Notify
 DisableProgramGroupPage=yes
 UsePreviousGroup=no
 OutputDir=..\dist-installer
-OutputBaseFilename=Agents-Notify-Setup-v1.0.3
+OutputBaseFilename=Agents-Notify-Setup-v1.0.4
 Compression=lzma2
 SolidCompression=yes
 WizardStyle=modern
@@ -147,7 +147,7 @@ begin
   if CurPageID = wpFinished then
   begin
     WizardForm.FinishedLabel.Caption :=
-      'Agents-Notify v1.0.3 已安装。' + #13 + #10 +
+      'Agents-Notify v1.0.4 已安装。' + #13 + #10 +
       '点击“完成”后会打开首次配置向导，可按需跳过任意渠道。' + #13 + #10 +
       '以后可双击 Agents-Notify.exe 或使用开始菜单修改设置。';
   end;

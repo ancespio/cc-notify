@@ -157,7 +157,6 @@ def save_provider_settings(
                 ).strip(),
                 "open_id": str(feishu.get("open_id") or "").strip(),
                 "chat_id": str(feishu.get("chat_id") or "").strip(),
-                "lark_cli": str(feishu.get("lark_cli") or "").strip(),
             }
         )
         config["agents"].update(
@@ -321,10 +320,12 @@ def send_test_notification(config_path: Path) -> bool:
 def send_feishu_test_notification(config_path: Path) -> bool:
     config = load_config(config_path)
     feishu = config["providers"]["feishu"]
+    if not str(feishu.get("app_id") or "").strip():
+        raise ValueError("请先配置飞书 App ID。")
+    if not str(feishu.get("app_secret") or "").strip():
+        raise ValueError("请先配置飞书 App Secret。")
     if not str(feishu.get("open_id") or "").strip():
         raise ValueError("请先配置飞书 open_id。")
-    if not str(feishu.get("lark_cli") or "").strip():
-        raise ValueError("请先配置 lark-cli 路径。")
     provider = FeishuProvider(feishu)
     sent = provider.send(
         NormalizedEvent(

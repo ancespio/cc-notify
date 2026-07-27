@@ -1,5 +1,5 @@
 {
-  "config_version": "1.0.3",
+  "config_version": "1.0.4",
   "providers": {
     "bark": {
       "mode": "all",
@@ -19,7 +19,6 @@
       "app_secret": "",
       "open_id": "",
       "chat_id": "",
-      "lark_cli": "",
       "timeout": 10
     }
   },

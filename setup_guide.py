@@ -32,7 +32,6 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--feishu-mode", choices=VALID_MODES, default="")
     parser.add_argument("--open-id", default="")
     parser.add_argument("--chat-id", default="")
-    parser.add_argument("--lark-cli", default="")
     parser.add_argument("--python-executable", default=sys.executable)
     parser.add_argument("--skip-codex", action="store_true")
     parser.add_argument("--skip-claude", action="store_true")
@@ -64,8 +63,6 @@ def write_config(path: Path, args: argparse.Namespace) -> None:
             feishu["open_id"] = args.open_id
         if args.chat_id:
             feishu["chat_id"] = args.chat_id
-        if args.lark_cli:
-            feishu["lark_cli"] = args.lark_cli
         return config
 
     update_config(path, mutate)

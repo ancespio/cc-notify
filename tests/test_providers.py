@@ -82,21 +82,22 @@ class BarkProviderTests(unittest.TestCase):
 
 
 class FeishuProviderTests(unittest.TestCase):
-    @patch("agents_notify.providers.subprocess.run")
-    def test_feishu_uses_argument_list(self, run_mock):
-        run_mock.return_value.returncode = 0
+    @patch("agents_notify.providers.FeishuApiClient")
+    def test_feishu_uses_http_openapi(self, client_class):
         provider = FeishuProvider(
             {
                 "mode": "off",
+                "app_id": "cli_app",
+                "app_secret": "secret_app",
                 "open_id": "ou_test",
-                "lark_cli": "lark-cli",
             }
         )
 
         self.assertTrue(provider.send(sample_event()))
-        command = run_mock.call_args.args[0]
-        self.assertEqual(command[0], "lark-cli")
-        self.assertIn("ou_test", command)
+        client_class.return_value.send_text.assert_called_once()
+        args = client_class.return_value.send_text.call_args.args
+        self.assertEqual(args[0], "ou_test")
+        self.assertIn("Codex 需要授权", args[1])
 
 
 class DispatchTests(unittest.TestCase):

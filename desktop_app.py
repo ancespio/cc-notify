@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
 import hashlib
-import subprocess
 import sys
 import threading
 
@@ -24,10 +23,7 @@ from agents_notify.desktop import (
     sync_hooks,
     user_home,
 )
-from agents_notify.feishu_control import (
-    LarkCliClient,
-    RECOMMENDED_LARK_CLI_VERSION,
-)
+from agents_notify.feishu_service import FeishuApiClient
 from agents_notify.diagnostics import write_diagnostic
 from agents_notify.icon_validation import (
     IconValidationError,
@@ -167,7 +163,6 @@ class SettingsValues:
     feishu_mode: str
     open_id: str
     chat_id: str
-    lark_cli: str
     codex: bool
     claude: bool
     feishu_app_id: str = ""
@@ -191,7 +186,6 @@ def load_settings_values(config_path: Path) -> SettingsValues:
         feishu_mode=str(feishu.get("mode") or "off"),
         open_id=str(feishu.get("open_id") or ""),
         chat_id=str(feishu.get("chat_id") or ""),
-        lark_cli=str(feishu.get("lark_cli") or default_lark_cli()),
         codex=bool(agents.get("codex", True)),
         claude=bool(agents.get("claude", True)),
         feishu_app_id=str(feishu.get("app_id") or ""),
@@ -199,26 +193,16 @@ def load_settings_values(config_path: Path) -> SettingsValues:
     )
 
 
-def default_lark_cli() -> str:
-    if sys.platform == "win32":
-        import os
-
-        return str(
-            Path(os.environ.get("APPDATA", ""))
-            / "npm"
-            / "lark-cli.cmd"
-        )
-    return "lark-cli"
-
-
 def validate_settings(values: SettingsValues) -> None:
     if values.bark_mode != "off" and not values.device_key.strip():
         raise ValueError("启用 Bark 通知时请填写 Bark Key。")
     if values.feishu_mode != "off":
+        if not values.feishu_app_id.strip():
+            raise ValueError("启用飞书通知时请填写 App ID。")
+        if not values.feishu_app_secret.strip():
+            raise ValueError("启用飞书通知时请填写 App Secret。")
         if not values.open_id.strip():
             raise ValueError("启用飞书功能时请填写 open_id。")
-        if not values.lark_cli.strip():
-            raise ValueError("启用飞书功能时请填写 lark-cli 路径。")
     if values.feishu_control_enabled:
         if not values.feishu_app_id.strip():
             raise ValueError("启用飞书遥控时请填写 App ID。")
@@ -253,7 +237,6 @@ def apply_settings(
             "app_secret": values.feishu_app_secret,
             "open_id": values.open_id,
             "chat_id": values.chat_id,
-            "lark_cli": values.lark_cli,
         },
         agents={
             "codex": values.codex,
@@ -435,15 +418,6 @@ class SettingsFrame(wx.Frame):
             "飞书 App Secret",
             self.feishu_app_secret_ctrl,
         )
-        self.lark_cli_ctrl = wx.TextCtrl(
-            feishu_panel, value=values.lark_cli
-        )
-        self._add_row(
-            feishu_form,
-            feishu_panel,
-            "lark-cli 路径",
-            self.lark_cli_ctrl,
-        )
         self.open_id_ctrl = wx.TextCtrl(
             feishu_panel, value=values.open_id
         )
@@ -459,43 +433,19 @@ class SettingsFrame(wx.Frame):
             feishu_form, feishu_panel, "chat_id", self.chat_id_ctrl
         )
         feishu_sizer.Add(feishu_form, 0, wx.EXPAND | wx.ALL, 12)
-        self.lark_status = wx.StaticText(
-            feishu_panel, label="尚未检测 lark-cli 登录状态"
+        self.feishu_status = wx.StaticText(
+            feishu_panel,
+            label=(
+                "飞书通知和远程控制共用 App ID/App Secret；"
+                "不需要安装或登录 lark-cli。"
+            ),
         )
+        self.feishu_status.Wrap(680)
         feishu_sizer.Add(
-            self.lark_status, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12
-        )
-        setup_actions = wx.BoxSizer(wx.HORIZONTAL)
-        for label, step in (
-            ("1. 安装", "install"),
-            ("2. 初始化", "config"),
-            ("3. 登录", "login"),
-        ):
-            button = wx.Button(feishu_panel, label=label)
-            button.Bind(
-                wx.EVT_BUTTON,
-                lambda _event, value=step: self._run_lark_setup(value),
-            )
-            setup_actions.Add(button, 0, wx.RIGHT, 8)
-        detect_button = wx.Button(feishu_panel, label="4. 重新检测")
-        detect_button.Bind(wx.EVT_BUTTON, self._on_lark_detect)
-        setup_actions.Add(detect_button, 0, wx.RIGHT, 8)
-        update_button = wx.Button(feishu_panel, label="更新 CLI")
-        update_button.Bind(
-            wx.EVT_BUTTON,
-            lambda _event: self._run_lark_setup("update"),
-        )
-        setup_actions.Add(update_button, 0, wx.RIGHT, 8)
-        fetch_open_id = wx.Button(
-            feishu_panel, label="自动获取 open_id"
-        )
-        fetch_open_id.Bind(wx.EVT_BUTTON, self._on_fetch_open_id)
-        setup_actions.Add(fetch_open_id, 0)
-        feishu_sizer.Add(
-            setup_actions, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12
+            self.feishu_status, 0, wx.LEFT | wx.RIGHT | wx.BOTTOM, 12
         )
         connect_button = wx.Button(
-            feishu_panel, label="连接并发送测试消息"
+            feishu_panel, label="发送测试消息并生成 chat_id"
         )
         connect_button.Bind(wx.EVT_BUTTON, self._on_feishu_connect)
         feishu_sizer.Add(connect_button, 0, wx.LEFT | wx.BOTTOM, 12)
@@ -693,7 +643,6 @@ class SettingsFrame(wx.Frame):
             feishu_mode=self._mode_value(self.feishu_mode),
             open_id=self.open_id_ctrl.GetValue(),
             chat_id=self.chat_id_ctrl.GetValue(),
-            lark_cli=self.lark_cli_ctrl.GetValue(),
             codex=self.codex_check.IsChecked(),
             claude=self.claude_check.IsChecked(),
             feishu_app_id=self.feishu_app_id_ctrl.GetValue(),
@@ -762,11 +711,12 @@ class SettingsFrame(wx.Frame):
         threading.Thread(target=worker, daemon=True).start()
 
     def _on_feishu_connect(self, _event: wx.CommandEvent) -> None:
+        app_id = self.feishu_app_id_ctrl.GetValue().strip()
+        app_secret = self.feishu_app_secret_ctrl.GetValue().strip()
         open_id = self.open_id_ctrl.GetValue().strip()
-        lark_cli = self.lark_cli_ctrl.GetValue().strip()
-        if not open_id or not lark_cli:
+        if not app_id or not app_secret or not open_id:
             wx.MessageBox(
-                "请填写 open_id 和 lark-cli 路径。",
+                "请先填写 App ID、App Secret 和 open_id。",
                 APP_NAME,
                 wx.OK | wx.ICON_ERROR,
             )
@@ -775,7 +725,7 @@ class SettingsFrame(wx.Frame):
 
         def worker() -> None:
             try:
-                client = LarkCliClient(lark_cli)
+                client = FeishuApiClient(app_id, app_secret)
                 chat_id = connect_feishu(
                     self.config_path,
                     open_id,
@@ -786,100 +736,6 @@ class SettingsFrame(wx.Frame):
                 wx.CallAfter(self._feishu_connected, "", str(exc))
 
         threading.Thread(target=worker, daemon=True).start()
-
-    def _run_lark_setup(self, step: str) -> None:
-        client = LarkCliClient(self.lark_cli_ctrl.GetValue().strip())
-        try:
-            command = client.setup_command(step)
-            process = subprocess.Popen(command)
-        except Exception as exc:
-            wx.MessageBox(str(exc), APP_NAME, wx.OK | wx.ICON_ERROR)
-            return
-        self.lark_status.SetLabel(
-            "已打开 PowerShell，请在窗口中完成官方交互流程。"
-        )
-
-        def wait_for_setup() -> None:
-            process.wait()
-            wx.CallAfter(self._refresh_lark_status)
-
-        threading.Thread(target=wait_for_setup, daemon=True).start()
-
-    def _on_lark_detect(self, _event: wx.CommandEvent) -> None:
-        self._refresh_lark_status()
-
-    def _refresh_lark_status(self) -> None:
-        executable = self.lark_cli_ctrl.GetValue().strip()
-        self.lark_status.SetLabel("正在检测 lark-cli...")
-
-        def worker() -> None:
-            status = LarkCliClient(executable).auth_status()
-            wx.CallAfter(self._lark_status_finished, status)
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _lark_status_finished(self, status) -> None:
-        if status.authenticated:
-            self.lark_status.SetLabel(f"已登录：{status.executable}")
-            self._refresh_lark_version()
-        else:
-            detail = status.detail or "未安装、未初始化或尚未登录。"
-            self.lark_status.SetLabel(f"未就绪：{detail}")
-
-    def _refresh_lark_version(self) -> None:
-        executable = self.lark_cli_ctrl.GetValue().strip()
-
-        def worker() -> None:
-            try:
-                version = LarkCliClient(executable).version()
-                current = tuple(int(part) for part in version.split("."))
-                recommended = tuple(
-                    int(part)
-                    for part in RECOMMENDED_LARK_CLI_VERSION.split(".")
-                )
-                if current < recommended:
-                    message = (
-                        f"已登录，lark-cli {version}；"
-                        f"建议更新到 {RECOMMENDED_LARK_CLI_VERSION} 或更高版本。"
-                    )
-                else:
-                    message = f"已登录，lark-cli {version}。"
-            except Exception as exc:
-                message = f"已登录；版本检测失败：{exc}"
-            wx.CallAfter(self.lark_status.SetLabel, message)
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _on_fetch_open_id(self, _event: wx.CommandEvent) -> None:
-        executable = self.lark_cli_ctrl.GetValue().strip()
-        self.lark_status.SetLabel("正在读取当前飞书用户 open_id...")
-
-        def worker() -> None:
-            try:
-                open_id = LarkCliClient(executable).current_open_id()
-                wx.CallAfter(self._open_id_finished, open_id, "")
-            except Exception as exc:
-                wx.CallAfter(self._open_id_finished, "", str(exc))
-
-        threading.Thread(target=worker, daemon=True).start()
-
-    def _open_id_finished(self, open_id: str, error: str) -> None:
-        if error:
-            self.lark_status.SetLabel(f"自动获取失败：{error}")
-            wx.MessageBox(
-                "自动获取 open_id 失败。\n\n"
-                f"{error}\n\n可手动运行：\n"
-                "lark-cli api GET "
-                "/open-apis/authen/v1/user_info "
-                "--as user --format json",
-                APP_NAME,
-                wx.OK | wx.ICON_ERROR,
-            )
-            return
-        self.open_id_ctrl.SetValue(open_id)
-        self.lark_status.SetLabel(
-            "已自动填写 open_id，可在连接前手动修正。"
-        )
 
     def _on_rerun_onboarding(
         self, _event: wx.CommandEvent
@@ -1106,7 +962,8 @@ class OnboardingFrame(wx.Frame):
         page, sizer = self._page(
             self.book,
             "3. 配置飞书",
-            "安装和登录会在可见 PowerShell 中完成。登录后可自动获取 open_id，连接消息会自动建立 chat_id。",
+            "填写同一个自建应用的 App ID、App Secret 和 open_id；"
+            "HTTP API 与 WebSocket 共用这组凭据，不需要 lark-cli。",
         )
         self.wizard_app_id = wx.TextCtrl(
             page, value=values.feishu_app_id
@@ -1114,43 +971,23 @@ class OnboardingFrame(wx.Frame):
         self.wizard_app_secret = SecretField(
             page, value=values.feishu_app_secret
         )
-        self.wizard_lark_cli = wx.TextCtrl(
-            page, value=values.lark_cli
-        )
         self.wizard_open_id = wx.TextCtrl(page, value=values.open_id)
         self.wizard_chat_id = wx.TextCtrl(
             page, value=values.chat_id, style=wx.TE_READONLY
         )
         self._row(page, sizer, "飞书 App ID", self.wizard_app_id)
         self._row(page, sizer, "飞书 App Secret", self.wizard_app_secret)
-        self._row(page, sizer, "lark-cli 路径", self.wizard_lark_cli)
         self._row(page, sizer, "open_id", self.wizard_open_id)
         self._row(page, sizer, "chat_id", self.wizard_chat_id)
-        commands = wx.BoxSizer(wx.HORIZONTAL)
-        for label, step in (
-            ("1. 安装", "install"),
-            ("2. 初始化", "config"),
-            ("3. 登录", "login"),
-            ("更新 CLI", "update"),
-        ):
-            button = wx.Button(page, label=label)
-            button.Bind(
-                wx.EVT_BUTTON,
-                lambda _event, value=step: self._wizard_lark_setup(value),
-            )
-            commands.Add(button, 0, wx.RIGHT, 8)
-        detect = wx.Button(page, label="4. 检测并获取 open_id")
-        detect.Bind(wx.EVT_BUTTON, self._wizard_fetch_open_id)
-        commands.Add(detect, 0)
-        sizer.Add(commands, 0, wx.BOTTOM, 10)
         connect = wx.Button(page, label="连接飞书并生成 chat_id")
         connect.Bind(wx.EVT_BUTTON, self._wizard_connect_feishu)
         sizer.Add(connect, 0)
-        self.wizard_lark_status = wx.StaticText(
-            page, label="尚未检测飞书登录状态。"
+        self.wizard_feishu_status = wx.StaticText(
+            page,
+            label="请先填写 App ID、App Secret 和 open_id。",
         )
-        self.wizard_lark_status.Wrap(650)
-        sizer.Add(self.wizard_lark_status, 0, wx.TOP, 12)
+        self.wizard_feishu_status.Wrap(650)
+        sizer.Add(self.wizard_feishu_status, 0, wx.TOP, 12)
         self.book.AddPage(page, "飞书")
 
     def _build_agent_page(self, values: SettingsValues) -> None:
@@ -1247,7 +1084,6 @@ class OnboardingFrame(wx.Frame):
             feishu_mode=self.wizard_feishu_mode.GetValue(),
             open_id=self.wizard_open_id.GetValue(),
             chat_id=self.wizard_chat_id.GetValue(),
-            lark_cli=self.wizard_lark_cli.GetValue(),
             codex=self.wizard_codex.IsChecked(),
             claude=self.wizard_claude.IsChecked(),
             feishu_app_id=self.wizard_app_id.GetValue(),
@@ -1324,7 +1160,6 @@ class OnboardingFrame(wx.Frame):
                 "app_secret": values.feishu_app_secret,
                 "open_id": values.open_id,
                 "chat_id": values.chat_id,
-                "lark_cli": values.lark_cli,
             },
             agents={"codex": values.codex, "claude": values.claude},
         )
@@ -1353,80 +1188,36 @@ class OnboardingFrame(wx.Frame):
 
         threading.Thread(target=worker, daemon=True).start()
 
-    def _wizard_lark_setup(self, step: str) -> None:
-        client = LarkCliClient(self.wizard_lark_cli.GetValue().strip())
-        try:
-            process = subprocess.Popen(client.setup_command(step))
-        except Exception as exc:
-            wx.MessageBox(str(exc), APP_NAME, wx.OK | wx.ICON_ERROR)
-            return
-        self.wizard_lark_status.SetLabel(
-            "请在 PowerShell 中完成官方交互流程。"
-        )
-
-        def wait_for_setup() -> None:
-            process.wait()
-            wx.CallAfter(
-                self.wizard_lark_status.SetLabel,
-                "命令已结束，可点击“检测并获取 open_id”。",
-            )
-
-        threading.Thread(target=wait_for_setup, daemon=True).start()
-
-    def _wizard_fetch_open_id(
-        self, _event: wx.CommandEvent
-    ) -> None:
-        executable = self.wizard_lark_cli.GetValue().strip()
-        self.wizard_lark_status.SetLabel("正在检测登录并获取 open_id...")
-
-        def worker() -> None:
-            try:
-                client = LarkCliClient(executable)
-                status = client.auth_status()
-                if not status.authenticated:
-                    raise OSError(
-                        status.detail or "lark-cli 尚未登录。"
-                    )
-                open_id = client.current_open_id()
-                wx.CallAfter(self.wizard_open_id.SetValue, open_id)
-                message = "已登录并自动填写 open_id。"
-            except Exception as exc:
-                message = (
-                    f"自动检测失败：{exc}\n"
-                    "可手动运行 user_info 命令并填写 open_id。"
-                )
-            wx.CallAfter(self.wizard_lark_status.SetLabel, message)
-
-        threading.Thread(target=worker, daemon=True).start()
-
     def _wizard_connect_feishu(
         self, _event: wx.CommandEvent
     ) -> None:
+        app_id = self.wizard_app_id.GetValue().strip()
+        app_secret = self.wizard_app_secret.GetValue().strip()
         open_id = self.wizard_open_id.GetValue().strip()
-        executable = self.wizard_lark_cli.GetValue().strip()
-        if not open_id:
+        if not app_id or not app_secret or not open_id:
             wx.MessageBox(
-                "请先自动获取或手动填写 open_id。",
+                "请先填写 App ID、App Secret 和 open_id。",
                 APP_NAME,
                 wx.OK | wx.ICON_ERROR,
             )
             return
-        self.wizard_lark_status.SetLabel(
+        self.wizard_feishu_status.SetLabel(
             "正在发送连接消息并建立 chat_id..."
         )
 
         def worker() -> None:
             try:
+                client = FeishuApiClient(app_id, app_secret)
                 chat_id = connect_feishu(
                     self.config_path,
                     open_id,
-                    LarkCliClient(executable),
+                    client,
                 )
                 wx.CallAfter(self.wizard_chat_id.SetValue, chat_id)
                 message = "连接成功，chat_id 已自动保存。"
             except Exception as exc:
                 message = f"连接失败：{exc}"
-            wx.CallAfter(self.wizard_lark_status.SetLabel, message)
+            wx.CallAfter(self.wizard_feishu_status.SetLabel, message)
 
         threading.Thread(target=worker, daemon=True).start()
 

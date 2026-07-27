@@ -7,7 +7,6 @@ from unittest.mock import MagicMock
 from agents_notify.config import load_config, update_config
 from agents_notify.feishu_control import (
     FeishuController,
-    LarkCliClient,
     execute_notify_command,
     parse_notify_command,
 )
@@ -95,69 +94,6 @@ class NotifyCommandTests(unittest.TestCase):
         self.assertIn("Bark", reply)
         self.assertIn("飞书", reply)
         self.assertIn("远程控制", reply)
-
-
-class LarkCliClientTests(unittest.TestCase):
-    def test_current_open_id_reads_nested_user_info(self):
-        client = LarkCliClient("lark-cli")
-        client._run = MagicMock(
-            return_value={"data": {"user": {"open_id": "ou_current"}}}
-        )
-
-        self.assertEqual(client.current_open_id(), "ou_current")
-        command = client._run.call_args.args
-        self.assertIn("/open-apis/authen/v1/user_info", command)
-        self.assertIn("--as", command)
-        self.assertIn("user", command)
-
-    def test_auth_status_uses_exit_code_without_exposing_tokens(self):
-        runner = MagicMock()
-        runner.return_value.returncode = 0
-        runner.return_value.stdout = '{"authenticated":true}'
-        runner.return_value.stderr = ""
-        client = LarkCliClient("lark-cli", runner=runner)
-
-        status = client.auth_status()
-
-        self.assertTrue(status.authenticated)
-        self.assertEqual(status.executable, "lark-cli")
-
-    def test_interactive_setup_commands_use_visible_powershell(self):
-        client = LarkCliClient("C:/Tools/lark-cli.cmd")
-
-        install = client.setup_command("install")
-        login = client.setup_command("login")
-
-        self.assertEqual(install[0].lower(), "powershell.exe")
-        self.assertIn("npx @larksuite/cli@latest install", install[-1])
-        self.assertIn("auth login --recommend", login[-1])
-
-    def test_reply_uses_json_content_for_multiline_text(self):
-        runner = MagicMock()
-        runner.return_value.returncode = 0
-        runner.return_value.stdout = "{}"
-        runner.return_value.stderr = ""
-        client = LarkCliClient("lark-cli", runner=runner)
-
-        client.reply("om_message", "line one\nline two")
-
-        command = runner.call_args.args[0]
-        self.assertIn("--content", command)
-        self.assertNotIn("--text", command)
-        content = command[command.index("--content") + 1]
-        self.assertEqual(
-            json.loads(content)["text"], "line one\nline two"
-        )
-
-    def test_version_status_and_update_command(self):
-        runner = MagicMock()
-        runner.return_value.returncode = 0
-        runner.return_value.stdout = "lark-cli version 1.0.25"
-        runner.return_value.stderr = ""
-        client = LarkCliClient("lark-cli", runner=runner)
-
-        self.assertEqual(client.version(), "1.0.25")
-        self.assertIn("update", client.setup_command("update")[-1])
 
 
 class FeishuControllerTests(unittest.TestCase):

@@ -378,7 +378,6 @@ class DesktopServiceTests(unittest.TestCase):
                     "mode": "off",
                     "open_id": "ou_owner",
                     "chat_id": "oc_private",
-                    "lark_cli": "lark-cli",
                 },
                 agents={"codex": True, "claude": False},
             )
@@ -406,9 +405,10 @@ class DesktopServiceTests(unittest.TestCase):
                 feishu={
                     "mode": "off",
                     "control_enabled": False,
+                    "app_id": "cli_app",
+                    "app_secret": "secret_app",
                     "open_id": "ou_owner",
                     "chat_id": "oc_private",
-                    "lark_cli": "lark-cli",
                 },
                 agents={"codex": True, "claude": True},
             )

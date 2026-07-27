@@ -1,16 +1,11 @@
 """Notification providers for Bark and Feishu."""
 
 import json
-import os
-import subprocess
-import sys
 from typing import Any, Iterable, Mapping
 from urllib.request import Request, urlopen
 
 from .events import NormalizedEvent
-
-
-CREATE_NO_WINDOW = 0x08000000 if sys.platform == "win32" else 0
+from .feishu_service import FeishuApiClient
 
 
 class BarkServiceError(OSError):
@@ -85,47 +80,26 @@ class BarkProvider:
 class FeishuProvider:
     def __init__(self, config: Mapping[str, Any]):
         self.config = dict(config)
-
-    def _cli(self) -> str:
-        configured = str(self.config.get("lark_cli") or "").strip()
-        if configured:
-            return configured
-        if sys.platform == "win32":
-            return os.path.join(
-                os.environ.get("APPDATA", ""), "npm", "lark-cli.cmd"
-            )
-        return "lark-cli"
+        self._client: FeishuApiClient | None = None
 
     def send(self, event: NormalizedEvent) -> bool:
+        app_id = str(self.config.get("app_id") or "").strip()
+        app_secret = str(self.config.get("app_secret") or "").strip()
         open_id = str(self.config.get("open_id") or "").strip()
-        if not open_id:
+        if not app_id or not app_secret or not open_id:
             return False
         title, body = format_notification(event)
-        content = json.dumps(
-            {"text": f"{title}\n{'-' * 10}\n{body}"}, ensure_ascii=False
+        if self._client is None:
+            self._client = FeishuApiClient(
+                app_id,
+                app_secret,
+                timeout=float(self.config.get("timeout", 10)),
+            )
+        self._client.send_text(
+            open_id,
+            f"{title}\n{'-' * 10}\n{body}",
         )
-        result = subprocess.run(
-            [
-                self._cli(),
-                "im",
-                "+messages-send",
-                "--as",
-                "bot",
-                "--user-id",
-                open_id,
-                "--content",
-                content,
-                "--msg-type",
-                "text",
-            ],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            encoding="utf-8",
-            errors="replace",
-            timeout=float(self.config.get("timeout", 10)),
-            creationflags=CREATE_NO_WINDOW,
-        )
-        return result.returncode == 0
+        return True
 
 
 def dispatch(

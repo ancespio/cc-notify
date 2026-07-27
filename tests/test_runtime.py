@@ -145,6 +145,29 @@ class ConfigTests(unittest.TestCase):
         self.assertNotIn("open_id", config)
         self.assertNotIn("chat_id", config)
 
+    def test_lark_cli_setting_is_removed_with_backup(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            path = Path(temp_dir) / "config.json"
+            path.write_text(
+                json.dumps(
+                    {
+                        "providers": {
+                            "feishu": {"lark_cli": "lark-cli"}
+                        }
+                    }
+                ),
+                encoding="utf-8",
+            )
+
+            config = load_config(path)
+
+            saved = json.loads(path.read_text(encoding="utf-8"))
+            backups = list(path.parent.glob("config.json.agents-notify-backup-*"))
+
+        self.assertNotIn("lark_cli", config["providers"]["feishu"])
+        self.assertNotIn("lark_cli", saved["providers"]["feishu"])
+        self.assertEqual(len(backups), 1)
+
     def test_current_version_enabled_fields_are_normalized_to_modes(self):
         with tempfile.TemporaryDirectory() as temp_dir:
             path = Path(temp_dir) / "config.json"

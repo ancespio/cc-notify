@@ -170,7 +170,6 @@ class TrayAppTests(unittest.TestCase):
             {
                 "app_id": "",
                 "app_secret": "",
-                "lark_cli": "",
                 "open_id": "",
                 "chat_id": "",
             }
@@ -203,7 +202,6 @@ class TrayAppTests(unittest.TestCase):
                             "feishu": {
                                 "app_id": "cli_app",
                                 "app_secret": "secret_app",
-                                "lark_cli": "lark-cli",
                                 "open_id": "ou_owner",
                                 "chat_id": "oc_private",
                             }
@@ -236,7 +234,6 @@ class TrayAppTests(unittest.TestCase):
                             "control_enabled": True,
                             "app_id": "cli_app",
                             "app_secret": "secret_app",
-                            "lark_cli": "custom-lark",
                             }
                         }
                     }

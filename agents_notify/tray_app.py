@@ -245,6 +245,7 @@ def build_feishu_controller(
     client = FeishuWebSocketService(
         str(settings.get("app_id") or ""),
         str(settings.get("app_secret") or ""),
+        timeout=float(settings.get("timeout", 10)),
     )
     return FeishuController(
         config_path,

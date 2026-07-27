@@ -30,9 +30,10 @@ Codex 的 `PermissionRequest` 在自动审核作出决定前触发，Hook 本身
 
 Bark/飞书发送目前采用 fail-open，适合不阻塞 Agent，但用户无法区分“未配置、网络失败、服务拒绝、Hook 未触发”。应增加脱敏的本地投递队列、指数退避、最大重试次数和托盘诊断页，同时保持 Hook 主线程快速返回。
 
-### 7. 降低 lark-cli 版本和 Shell 差异
+### 7. [已完成] 移除 lark-cli 与 Shell 差异
 
-飞书依赖外部 `lark-cli`，Windows `.cmd`、UTF-8/GBK、特殊字符、版本升级和登录状态都会影响结果。后续应固定兼容版本范围、启动时显示可行动诊断，并优先调用稳定的 HTTP API 适配层，而不是把复杂 JSON 长字符串交给 Shell。
+飞书通知、连接测试和命令回复已统一使用 `lark-oapi` 的 HTTP OpenAPI，远程控制继续
+使用同一 SDK 的 WebSocket 长连接。设置页不再要求安装、初始化或登录外部 `lark-cli`。
 
 ### 8. 提升托盘生命周期稳定性
 
